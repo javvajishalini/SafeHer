@@ -7,3 +7,11 @@ spring:
 
 server:
   port: 8080
+
+jwt:
+  secret: ${JWT_SECRET:825c866d9294ff1929bd7d8df981df1b306fc6e2320b9dfbe5412dc08ebc4349}
+  expiration: 86400000
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
