@@ -26,7 +26,7 @@ export const Login: React.FC = () => {
 
   return (
     <div className="auth-container">
-      <div className="card auth-card">
+      <div className="card auth-card animate-slide-up">
         <h2 style={{ textAlign: 'center', marginBottom: '2rem' }}>Welcome Back</h2>
         {error && <div style={{ background: '#FEE2E2', color: '#B91C1C', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '1rem' }}>{error}</div>}
         <form onSubmit={handleSubmit}>

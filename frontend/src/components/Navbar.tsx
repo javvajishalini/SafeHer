@@ -13,7 +13,7 @@ export const Navbar: React.FC = () => {
   };
 
   return (
-    <nav style={{ background: 'white', padding: '1rem 2rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <nav className="glass-navbar" style={{ padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.5rem', fontWeight: 'bold' }}>
         <Shield color="var(--primary)" />
         SafeHer
@@ -22,6 +22,7 @@ export const Navbar: React.FC = () => {
         {isAuthenticated ? (
           <>
             <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Dashboard</Link>
+            <Link to="/journey" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Journey</Link>
             <Link to="/profile" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><UserIcon size={18}/> Profile</Link>
             <Link to="/emergency-contacts" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Phone size={18}/> Contacts</Link>
             <Link to="/settings" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Settings size={18}/> Settings</Link>
@@ -33,7 +34,7 @@ export const Navbar: React.FC = () => {
         ) : (
           <>
             <Link to="/login">Login</Link>
-            <Link to="/register" style={{ padding: '0.5rem 1rem', background: 'var(--primary)', color: 'white', borderRadius: '0.5rem' }}>Register</Link>
+            <Link to="/register" className="btn btn-primary" style={{ padding: '0.5rem 1.25rem', width: 'auto' }}>Register</Link>
           </>
         )}
       </div>
