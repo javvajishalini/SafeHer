@@ -1,0 +1,39 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Java / Maven
+target/
+build/
+*.class
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env/
+
+# Build and dist
+dist/
+dist-ssr/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Secrets
+secrets/
+*.pem
+
+# OS generated files
+.DS_Store
+Thumbs.db

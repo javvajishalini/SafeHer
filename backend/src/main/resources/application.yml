@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: SafeHer
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/safeher}
+
+server:
+  port: 8080
