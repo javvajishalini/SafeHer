@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Shield, User as UserIcon, LogOut } from 'lucide-react';
+import { Shield, User as UserIcon, LogOut, Phone, Settings } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { isAuthenticated, logout, user } = useAuth();
@@ -21,9 +21,11 @@ export const Navbar: React.FC = () => {
       <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
         {isAuthenticated ? (
           <>
-            <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>Hello, {user?.fullName}</span>
             <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Dashboard</Link>
             <Link to="/profile" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><UserIcon size={18}/> Profile</Link>
+            <Link to="/emergency-contacts" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Phone size={18}/> Contacts</Link>
+            <Link to="/settings" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Settings size={18}/> Settings</Link>
+            <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>Hello, {user?.fullName}</span>
             <button onClick={handleLogout} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               <LogOut size={18}/> Logout
             </button>
