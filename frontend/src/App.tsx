@@ -10,6 +10,9 @@ import { Dashboard } from './pages/Dashboard';
 import { Profile } from './pages/Profile';
 import { EmergencyContacts } from './pages/EmergencyContacts';
 import { JourneyPage } from './pages/JourneyPage';
+import { FakeCall } from './pages/FakeCall';
+import { SafetyDiary } from './pages/SafetyDiary';
+import { AdminDashboard } from './pages/AdminDashboard';
 
 const App: React.FC = () => {
   return (
@@ -26,6 +29,9 @@ const App: React.FC = () => {
               <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/emergency-contacts" element={<ProtectedRoute><EmergencyContacts /></ProtectedRoute>} />
               <Route path="/journey" element={<ProtectedRoute><JourneyPage /></ProtectedRoute>} />
+              <Route path="/fake-call" element={<ProtectedRoute><FakeCall /></ProtectedRoute>} />
+              <Route path="/diary" element={<ProtectedRoute><SafetyDiary /></ProtectedRoute>} />
+              <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             </Routes>
           </main>
           <Footer />

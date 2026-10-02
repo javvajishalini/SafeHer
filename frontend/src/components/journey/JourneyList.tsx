@@ -1,12 +1,12 @@
 import React from 'react';
-import { Journey, JourneyStatus } from '../../services/journey.service';
+import { JourneyStatus, type Journey } from '../../services/journey.service';
 
 interface JourneyListProps {
     journeys: Journey[];
     onEdit: (j: Journey) => void;
-    onStart: (id: string) => void;
-    onComplete: (id: string) => void;
-    onCancel: (id: string) => void;
+    onStart: (id: number) => void;
+    onComplete: (id: number) => void;
+    onCancel: (id: number) => void;
 }
 
 export const JourneyList: React.FC<JourneyListProps> = ({ journeys, onEdit, onStart, onComplete, onCancel }) => {

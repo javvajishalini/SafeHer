@@ -22,6 +22,7 @@ export const Navbar: React.FC = () => {
         {isAuthenticated ? (
           <>
             <Link to="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Dashboard</Link>
+            <Link to="/admin/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--danger)', fontWeight: 'bold' }}>Admin</Link>
             <Link to="/journey" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>Journey</Link>
             <Link to="/profile" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><UserIcon size={18}/> Profile</Link>
             <Link to="/emergency-contacts" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Phone size={18}/> Contacts</Link>

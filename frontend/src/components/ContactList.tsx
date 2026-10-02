@@ -15,7 +15,7 @@ export const ContactList: React.FC<Props> = ({ contacts, refresh }) => {
   const [error, setError] = React.useState('');
   const [loading, setLoading] = React.useState(false);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this contact?')) return;
     setLoading(true);
     try {
@@ -28,7 +28,7 @@ export const ContactList: React.FC<Props> = ({ contacts, refresh }) => {
     }
   };
 
-  const toggleStatus = async (id: string, current: boolean) => {
+  const toggleStatus = async (id: number, current: boolean) => {
     setLoading(true);
     try {
       await contactService.toggleStatus(id, !current);

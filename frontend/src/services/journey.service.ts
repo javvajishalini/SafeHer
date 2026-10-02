@@ -14,7 +14,7 @@ export enum JourneyStatus {
 }
 
 export interface Journey {
-    id: string;
+    id: number;
     title: string;
     startLocation: Location;
     destination: Location;
@@ -50,27 +50,27 @@ export const journeyService = {
         return response.data;
     },
 
-    getJourneyById: async (id: string): Promise<Journey> => {
+    getJourneyById: async (id: number): Promise<Journey> => {
         const response = await api.get(`/journeys/${id}`);
         return response.data;
     },
 
-    updateJourney: async (id: string, data: CreateJourneyRequest): Promise<Journey> => {
+    updateJourney: async (id: number, data: CreateJourneyRequest): Promise<Journey> => {
         const response = await api.put(`/journeys/${id}`, data);
         return response.data;
     },
 
-    startJourney: async (id: string): Promise<Journey> => {
+    startJourney: async (id: number): Promise<Journey> => {
         const response = await api.patch(`/journeys/${id}/start`);
         return response.data;
     },
 
-    completeJourney: async (id: string): Promise<Journey> => {
+    completeJourney: async (id: number): Promise<Journey> => {
         const response = await api.patch(`/journeys/${id}/complete`);
         return response.data;
     },
 
-    cancelJourney: async (id: string): Promise<Journey> => {
+    cancelJourney: async (id: number): Promise<Journey> => {
         const response = await api.patch(`/journeys/${id}/cancel`);
         return response.data;
     }

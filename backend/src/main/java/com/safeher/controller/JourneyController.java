@@ -3,12 +3,13 @@ package com.safeher.controller;
 import com.safeher.dto.CreateJourneyRequest;
 import com.safeher.dto.JourneyResponse;
 import com.safeher.dto.UpdateJourneyRequest;
+import com.safeher.security.UserDetailsImpl;
 import com.safeher.service.JourneyService;
-import com.safeher.service.UserService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,67 +21,52 @@ public class JourneyController {
     @Autowired
     private JourneyService journeyService;
 
-    @Autowired
-    private UserService userService;
-
-    private String getUserId(Authentication authentication) {
-        String email = authentication.getName();
-        return userService.getUserProfile(email).getId();
-    }
-
     @PostMapping
     public ResponseEntity<JourneyResponse> createJourney(
-            Authentication authentication,
-            @RequestBody CreateJourneyRequest request) {
-        String userId = getUserId(authentication);
-        JourneyResponse response = journeyService.createJourney(userId, request);
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @Valid @RequestBody CreateJourneyRequest request) {
+        return new ResponseEntity<>(journeyService.createJourney(userDetails.getId(), request), HttpStatus.CREATED);
     }
 
     @GetMapping
-    public ResponseEntity<List<JourneyResponse>> getUserJourneys(Authentication authentication) {
-        String userId = getUserId(authentication);
-        return ResponseEntity.ok(journeyService.getUserJourneys(userId));
+    public ResponseEntity<List<JourneyResponse>> getJourneys(
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        return ResponseEntity.ok(journeyService.getUserJourneys(userDetails.getId()));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<JourneyResponse> getJourneyById(
-            Authentication authentication,
-            @PathVariable String id) {
-        String userId = getUserId(authentication);
-        return ResponseEntity.ok(journeyService.getJourneyById(id, userId));
+    public ResponseEntity<JourneyResponse> getJourney(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        return ResponseEntity.ok(journeyService.getJourneyById(id, userDetails.getId()));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<JourneyResponse> updateJourney(
-            Authentication authentication,
-            @PathVariable String id,
-            @RequestBody UpdateJourneyRequest request) {
-        String userId = getUserId(authentication);
-        return ResponseEntity.ok(journeyService.updateJourney(id, userId, request));
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @Valid @RequestBody UpdateJourneyRequest request) {
+        return ResponseEntity.ok(journeyService.updateJourney(id, userDetails.getId(), request));
     }
 
     @PatchMapping("/{id}/start")
     public ResponseEntity<JourneyResponse> startJourney(
-            Authentication authentication,
-            @PathVariable String id) {
-        String userId = getUserId(authentication);
-        return ResponseEntity.ok(journeyService.startJourney(id, userId));
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        return ResponseEntity.ok(journeyService.startJourney(id, userDetails.getId()));
     }
 
     @PatchMapping("/{id}/complete")
     public ResponseEntity<JourneyResponse> completeJourney(
-            Authentication authentication,
-            @PathVariable String id) {
-        String userId = getUserId(authentication);
-        return ResponseEntity.ok(journeyService.completeJourney(id, userId));
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        return ResponseEntity.ok(journeyService.completeJourney(id, userDetails.getId()));
     }
 
     @PatchMapping("/{id}/cancel")
     public ResponseEntity<JourneyResponse> cancelJourney(
-            Authentication authentication,
-            @PathVariable String id) {
-        String userId = getUserId(authentication);
-        return ResponseEntity.ok(journeyService.cancelJourney(id, userId));
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        return ResponseEntity.ok(journeyService.cancelJourney(id, userDetails.getId()));
     }
 }

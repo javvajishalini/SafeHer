@@ -15,6 +15,10 @@ public class UserDetailsImpl implements UserDetails {
         this.user = user;
     }
 
+    public Long getId() {
+        return user.getId();
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()));
@@ -35,7 +39,7 @@ public class UserDetailsImpl implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return user.getAccountStatus() != com.safeher.model.AccountStatus.BANNED 
+        return user.getAccountStatus() != com.safeher.model.AccountStatus.BANNED
             && user.getAccountStatus() != com.safeher.model.AccountStatus.SUSPENDED;
     }
 

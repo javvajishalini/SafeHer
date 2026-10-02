@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { journeyService, Journey, JourneyStatus, CreateJourneyRequest } from '../services/journey.service';
+import { journeyService, JourneyStatus, type Journey, type CreateJourneyRequest } from '../services/journey.service';
 import { JourneyList } from '../components/journey/JourneyList';
 import { JourneyForm } from '../components/journey/JourneyForm';
 
@@ -56,7 +56,7 @@ export const JourneyPage: React.FC = () => {
         }
     };
 
-    const handleStart = async (id: string) => {
+    const handleStart = async (id: number) => {
         try {
             await journeyService.startJourney(id);
             loadJourneys();
@@ -65,7 +65,7 @@ export const JourneyPage: React.FC = () => {
         }
     };
 
-    const handleComplete = async (id: string) => {
+    const handleComplete = async (id: number) => {
         try {
             await journeyService.completeJourney(id);
             loadJourneys();
@@ -74,7 +74,7 @@ export const JourneyPage: React.FC = () => {
         }
     };
 
-    const handleCancel = async (id: string) => {
+    const handleCancel = async (id: number) => {
         if(window.confirm('Are you sure you want to cancel this journey?')) {
             try {
                 await journeyService.cancelJourney(id);

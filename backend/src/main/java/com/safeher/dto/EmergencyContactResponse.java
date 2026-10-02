@@ -1,7 +1,7 @@
 package com.safeher.dto;
 
 public class EmergencyContactResponse {
-    private String id;
+    private Long id;
     private String name;
     private String phoneNumber;
     private String email;
@@ -11,7 +11,7 @@ public class EmergencyContactResponse {
 
     public EmergencyContactResponse() {}
 
-    public EmergencyContactResponse(String id, String name, String phoneNumber, String email, String relationship, Integer priority, boolean isActive) {
+    public EmergencyContactResponse(Long id, String name, String phoneNumber, String email, String relationship, Integer priority, boolean isActive) {
         this.id = id;
         this.name = name;
         this.phoneNumber = phoneNumber;
@@ -21,8 +21,8 @@ public class EmergencyContactResponse {
         this.isActive = isActive;
     }
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getPhoneNumber() { return phoneNumber; }
@@ -33,6 +33,6 @@ public class EmergencyContactResponse {
     public void setRelationship(String relationship) { this.relationship = relationship; }
     public Integer getPriority() { return priority; }
     public void setPriority(Integer priority) { this.priority = priority; }
-    public boolean isActive() { return isActive; }
-    public void setActive(boolean active) { isActive = active; }
+    public boolean getIsActive() { return isActive; }
+    public void setIsActive(boolean isActive) { this.isActive = isActive; }
 }

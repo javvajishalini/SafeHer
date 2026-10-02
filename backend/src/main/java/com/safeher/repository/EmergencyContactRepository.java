@@ -1,11 +1,15 @@
 package com.safeher.repository;
 
 import com.safeher.model.EmergencyContact;
-import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
-public interface EmergencyContactRepository extends MongoRepository<EmergencyContact, String> {
-    List<EmergencyContact> findByUserIdOrderByPriorityAsc(String userId);
-    Optional<EmergencyContact> findByIdAndUserId(String id, String userId);
+@Repository
+public interface EmergencyContactRepository extends JpaRepository<EmergencyContact, Long> {
+    List<EmergencyContact> findByUserIdOrderByPriorityAsc(Long userId);
+    Optional<EmergencyContact> findByIdAndUserId(Long id, Long userId);
+    long countByUserId(Long userId);
+    List<EmergencyContact> findByUserIdAndIsActiveTrue(Long userId);
 }

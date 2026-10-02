@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CreateJourneyRequest } from '../../services/journey.service';
+import type { CreateJourneyRequest } from '../../services/journey.service';
 
 interface JourneyFormProps {
     initialData?: CreateJourneyRequest;

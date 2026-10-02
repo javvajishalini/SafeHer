@@ -1,20 +1,21 @@
 package com.safeher.controller;
 
-import com.safeher.dto.ContactStatusRequest;
 import com.safeher.dto.EmergencyContactRequest;
 import com.safeher.dto.EmergencyContactResponse;
+import com.safeher.security.UserDetailsImpl;
 import com.safeher.service.EmergencyContactService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/contacts")
 public class EmergencyContactController {
-
     private final EmergencyContactService contactService;
 
     public EmergencyContactController(EmergencyContactService contactService) {
@@ -23,60 +24,46 @@ public class EmergencyContactController {
 
     @PostMapping
     public ResponseEntity<EmergencyContactResponse> createContact(
-            Authentication authentication,
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
             @Valid @RequestBody EmergencyContactRequest request) {
-        return ResponseEntity.ok(contactService.createContact(authentication.getName(), request));
+        return new ResponseEntity<>(contactService.createContact(userDetails.getUsername(), request), HttpStatus.CREATED);
     }
 
     @GetMapping
-    public ResponseEntity<List<EmergencyContactResponse>> getContacts(Authentication authentication) {
-        return ResponseEntity.ok(contactService.getContacts(authentication.getName()));
+    public ResponseEntity<List<EmergencyContactResponse>> getContacts(
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        return ResponseEntity.ok(contactService.getContacts(userDetails.getUsername()));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<EmergencyContactResponse> getContact(
-            Authentication authentication,
-            @PathVariable String id) {
-        try {
-            return ResponseEntity.ok(contactService.getContactById(authentication.getName(), id));
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        return ResponseEntity.ok(contactService.getContactById(userDetails.getUsername(), id));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<EmergencyContactResponse> updateContact(
-            Authentication authentication,
-            @PathVariable String id,
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
             @Valid @RequestBody EmergencyContactRequest request) {
-        try {
-            return ResponseEntity.ok(contactService.updateContact(authentication.getName(), id, request));
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.ok(contactService.updateContact(userDetails.getUsername(), id, request));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteContact(
-            Authentication authentication,
-            @PathVariable String id) {
-        try {
-            contactService.deleteContact(authentication.getName(), id);
-            return ResponseEntity.ok().build();
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        contactService.deleteContact(userDetails.getUsername(), id);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<EmergencyContactResponse> updateStatus(
-            Authentication authentication,
-            @PathVariable String id,
-            @Valid @RequestBody ContactStatusRequest request) {
-        try {
-            return ResponseEntity.ok(contactService.updateContactStatus(authentication.getName(), id, request.getIsActive()));
-        } catch (Exception e) {
-            return ResponseEntity.notFound().build();
-        }
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @RequestBody Map<String, Boolean> statusUpdate) {
+        return ResponseEntity.ok(contactService.updateContactStatus(
+                userDetails.getUsername(), id, statusUpdate.get("isActive")));
     }
 }
