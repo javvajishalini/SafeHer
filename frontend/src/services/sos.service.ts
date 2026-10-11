@@ -1,46 +1,60 @@
-import axios from 'axios';
+import api from './api';
 
-const API_URL = 'http://localhost:8080/api/sos';
+export interface SOSResponse {
+  id: number;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  address?: string;
+  timestamp?: string;
+  status: 'ACTIVE' | 'RESOLVED' | 'CANCELLED';
+  message?: string;
+  mapsUrl?: string;
+  createdAt?: string;
+  resolvedAt?: string;
+}
+
+export interface ActivateSOSRequest {
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  address?: string;
+  message?: string;
+  contactIds?: number[];
+}
 
 export const sosService = {
-  activateSOS: async (data: { latitude?: number; longitude?: number; accuracy?: number; address?: string; message?: string }) => {
-    const response = await axios.post(API_URL, data, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    });
+  activateSOS: async (data: ActivateSOSRequest): Promise<SOSResponse> => {
+    const response = await api.post<SOSResponse>('/sos', data);
     return response.data;
   },
 
-  getHistory: async () => {
-    const response = await axios.get(`${API_URL}/history`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    });
+  getHistory: async (): Promise<SOSResponse[]> => {
+    const response = await api.get<SOSResponse[]>('/sos/history');
     return response.data;
   },
 
-  getActiveSOS: async () => {
-    const history = await sosService.getHistory();
-    return history.find((incident: any) => incident.status === 'ACTIVE');
+  // Alias for backward compatibility with existing views
+  getSOSHistory: async (): Promise<SOSResponse[]> => {
+    return sosService.getHistory();
   },
 
-  resolveSOS: async (id: number) => {
-    const response = await axios.patch(`${API_URL}/${id}/resolve`, {}, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    });
+  getActiveSOS: async (): Promise<SOSResponse | undefined> => {
+    try {
+      const history = await sosService.getHistory();
+      return history.find((incident) => incident.status === 'ACTIVE');
+    } catch (e) {
+      return undefined;
+    }
+  },
+
+  resolveSOS: async (id: number): Promise<SOSResponse> => {
+    const response = await api.patch<SOSResponse>(`/sos/${id}/resolve`, {});
     return response.data;
   },
 
-  cancelSOS: async (id: number) => {
-    const response = await axios.patch(`${API_URL}/${id}/cancel`, {}, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    });
+  cancelSOS: async (id: number): Promise<SOSResponse> => {
+    const response = await api.patch<SOSResponse>(`/sos/${id}/cancel`, {});
     return response.data;
   }
 };

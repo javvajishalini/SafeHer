@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { contactService } from '../services/contact.service';
 import { ContactList } from '../components/ContactList';
+import { Users, ShieldCheck, PhoneCall, Info } from 'lucide-react';
 
 export const EmergencyContacts: React.FC = () => {
   const [contacts, setContacts] = useState<any[]>([]);
@@ -13,7 +14,10 @@ export const EmergencyContacts: React.FC = () => {
       const data = await contactService.getAll();
       setContacts(data);
     } catch (err: any) {
-      setError(err.response?.data || 'Failed to load contacts');
+      const msg = err.response?.data;
+      if (typeof msg === 'string') setError(msg);
+      else if (msg?.message) setError(msg.message);
+      else setError('Failed to load emergency contacts');
     } finally {
       setLoading(false);
     }
@@ -23,13 +27,51 @@ export const EmergencyContacts: React.FC = () => {
     loadContacts();
   }, []);
 
-  if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading contacts...</div>;
-
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
-      <h2>Emergency Contacts</h2>
-      {error && <div style={{ background: '#FEE2E2', color: '#B91C1C', padding: '0.75rem', borderRadius: '0.5rem', marginBottom: '1rem' }}>{error}</div>}
-      <ContactList contacts={contacts} refresh={loadContacts} />
+    <div className="animate-fade-in" style={{ padding: '2rem 1.5rem', maxWidth: '1200px', margin: '0 auto' }}>
+      
+      {/* Header */}
+      <div style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+          <div style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', padding: '0.6rem', borderRadius: '12px' }}>
+            <Users size={28} />
+          </div>
+          <div>
+            <h1 style={{ fontSize: '2.2rem', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
+              Emergency Contacts
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '1rem', marginTop: '0.2rem' }}>
+              Your trusted safety responders. These individuals are contacted immediately during emergency alerts.
+            </p>
+          </div>
+        </div>
+
+        {/* Informational Banner */}
+        <div style={{ 
+          background: 'rgba(99, 102, 241, 0.06)', 
+          border: '1px solid rgba(99, 102, 241, 0.2)', 
+          borderRadius: '16px', 
+          padding: '1rem 1.25rem', 
+          marginTop: '1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.85rem'
+        }}>
+          <ShieldCheck size={24} color="var(--primary)" style={{ flexShrink: 0 }} />
+          <span style={{ fontSize: '0.92rem', color: 'var(--text-main)' }}>
+            <strong>How it works:</strong> In the event of an SOS activation, your <em>Priority #1</em> contact is alerted first via SMS and instant dispatch with your exact GPS location, followed by all remaining active contacts in order.
+          </span>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div style={{ display: 'inline-block', width: '32px', height: '32px', border: '3px solid rgba(99,102,241,0.2)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1rem' }}></div>
+          <p>Loading your emergency contacts...</p>
+        </div>
+      ) : (
+        <ContactList contacts={contacts} refresh={loadContacts} />
+      )}
     </div>
   );
 };

@@ -1,6 +1,8 @@
 package com.safeher.model;
 
 import jakarta.persistence.*;
+import java.util.HashSet;
+import java.util.Set;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -34,6 +36,15 @@ public class Journey {
     })
     private Location destination;
 
+    /** Emergency contacts selected by user to be notified when journey is overdue or SOS is triggered */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+        name = "smart_journey_contacts",
+        joinColumns = @JoinColumn(name = "journey_id"),
+        inverseJoinColumns = @JoinColumn(name = "contact_id")
+    )
+    private Set<EmergencyContact> emergencyContacts = new HashSet<>();
+
     @Column(name = "journey_date")
     private LocalDate journeyDate;
 
@@ -42,6 +53,33 @@ public class Journey {
 
     @Column(name = "expected_arrival_time")
     private LocalTime expectedArrivalTime;
+
+    /** Safety buffer in minutes (added on top of expected duration) */
+    @Column(name = "safety_buffer_minutes")
+    private Integer safetyBufferMinutes;
+
+    /**
+     * Absolute UTC deadline: startedAt + expectedDurationMinutes + safetyBufferMinutes.
+     * The overdue scheduler compares current time against this value.
+     */
+    @Column(name = "expected_arrival_at")
+    private Instant expectedArrivalAt;
+
+    /** Prevents sending duplicate overdue alerts for the same journey */
+    @Column(name = "overdue_alert_sent", nullable = false)
+    private boolean overdueAlertSent = false;
+
+    /** Most recent latitude obtained from the browser geolocation API */
+    @Column(name = "last_latitude")
+    private Double lastLatitude;
+
+    /** Most recent longitude obtained from the browser geolocation API */
+    @Column(name = "last_longitude")
+    private Double lastLongitude;
+
+    /** Timestamp of the most recent location update */
+    @Column(name = "last_location_update")
+    private Instant lastLocationUpdate;
 
     @Column(columnDefinition = "TEXT")
     private String description;
@@ -78,6 +116,7 @@ public class Journey {
 
     public Journey() {}
 
+    // ---- Getters & Setters ----
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Long getUserId() { return userId; }
@@ -88,12 +127,26 @@ public class Journey {
     public void setStartLocation(Location startLocation) { this.startLocation = startLocation; }
     public Location getDestination() { return destination; }
     public void setDestination(Location destination) { this.destination = destination; }
+    public Set<EmergencyContact> getEmergencyContacts() { return emergencyContacts; }
+    public void setEmergencyContacts(Set<EmergencyContact> emergencyContacts) { this.emergencyContacts = emergencyContacts; }
     public LocalDate getJourneyDate() { return journeyDate; }
     public void setJourneyDate(LocalDate journeyDate) { this.journeyDate = journeyDate; }
     public LocalTime getPlannedStartTime() { return plannedStartTime; }
     public void setPlannedStartTime(LocalTime plannedStartTime) { this.plannedStartTime = plannedStartTime; }
     public LocalTime getExpectedArrivalTime() { return expectedArrivalTime; }
     public void setExpectedArrivalTime(LocalTime expectedArrivalTime) { this.expectedArrivalTime = expectedArrivalTime; }
+    public Integer getSafetyBufferMinutes() { return safetyBufferMinutes; }
+    public void setSafetyBufferMinutes(Integer safetyBufferMinutes) { this.safetyBufferMinutes = safetyBufferMinutes; }
+    public Instant getExpectedArrivalAt() { return expectedArrivalAt; }
+    public void setExpectedArrivalAt(Instant expectedArrivalAt) { this.expectedArrivalAt = expectedArrivalAt; }
+    public boolean isOverdueAlertSent() { return overdueAlertSent; }
+    public void setOverdueAlertSent(boolean overdueAlertSent) { this.overdueAlertSent = overdueAlertSent; }
+    public Double getLastLatitude() { return lastLatitude; }
+    public void setLastLatitude(Double lastLatitude) { this.lastLatitude = lastLatitude; }
+    public Double getLastLongitude() { return lastLongitude; }
+    public void setLastLongitude(Double lastLongitude) { this.lastLongitude = lastLongitude; }
+    public Instant getLastLocationUpdate() { return lastLocationUpdate; }
+    public void setLastLocationUpdate(Instant lastLocationUpdate) { this.lastLocationUpdate = lastLocationUpdate; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
     public JourneyStatus getStatus() { return status; }

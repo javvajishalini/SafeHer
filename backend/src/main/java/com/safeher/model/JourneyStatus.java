@@ -4,5 +4,6 @@ public enum JourneyStatus {
     PLANNED,
     ACTIVE,
     COMPLETED,
+    OVERDUE,
     CANCELLED
 }

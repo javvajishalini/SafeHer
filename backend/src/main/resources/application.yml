@@ -2,9 +2,9 @@ spring:
   application:
     name: SafeHer
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/safeher}
+    url: ${DATABASE_URL:jdbc:postgresql://127.0.0.1:5432/safeher}
     username: ${DATABASE_USERNAME:postgres}
-    password: ${DATABASE_PASSWORD:postgres}
+    password: ${DATABASE_PASSWORD:shalini@2005}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:

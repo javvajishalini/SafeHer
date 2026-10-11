@@ -14,6 +14,7 @@ public class SOSResponse {
     private String message;
     private Instant resolvedAt;
     private Instant createdAt;
+    private String mapsUrl;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -35,4 +36,6 @@ public class SOSResponse {
     public void setResolvedAt(Instant resolvedAt) { this.resolvedAt = resolvedAt; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public String getMapsUrl() { return mapsUrl; }
+    public void setMapsUrl(String mapsUrl) { this.mapsUrl = mapsUrl; }
 }

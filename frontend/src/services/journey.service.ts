@@ -9,8 +9,16 @@ export interface Location {
 export enum JourneyStatus {
     PLANNED = 'PLANNED',
     ACTIVE = 'ACTIVE',
+    OVERDUE = 'OVERDUE',
     COMPLETED = 'COMPLETED',
     CANCELLED = 'CANCELLED'
+}
+
+export interface ContactSummary {
+    id: number;
+    name: string;
+    phoneNumber?: string;
+    email?: string;
 }
 
 export interface Journey {
@@ -23,6 +31,13 @@ export interface Journey {
     expectedArrivalTime: string; // HH:mm:ss
     description?: string;
     status: JourneyStatus;
+    safetyBufferMinutes?: number;
+    expectedArrivalAt?: string; // Instant ISO string
+    lastLatitude?: number;
+    lastLongitude?: number;
+    lastLocationUpdate?: string;
+    lastLocationUrl?: string;
+    emergencyContacts?: ContactSummary[];
     createdAt: string;
     startedAt?: string;
     completedAt?: string;
@@ -37,6 +52,21 @@ export interface CreateJourneyRequest {
     plannedStartTime: string;
     expectedArrivalTime: string;
     description?: string;
+    safetyBufferMinutes?: number;
+    emergencyContactIds?: number[];
+    expectedDurationMinutes?: number;
+}
+
+export interface StartJourneyPayload {
+    latitude?: number;
+    longitude?: number;
+    expectedDurationMinutes?: number;
+}
+
+export interface LocationUpdatePayload {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
 }
 
 export const journeyService = {
@@ -50,6 +80,16 @@ export const journeyService = {
         return response.data;
     },
 
+    getActiveJourney: async (): Promise<Journey | null> => {
+        try {
+            const response = await api.get('/journeys/active');
+            if (response.status === 204 || !response.data) return null;
+            return response.data;
+        } catch (e) {
+            return null;
+        }
+    },
+
     getJourneyById: async (id: number): Promise<Journey> => {
         const response = await api.get(`/journeys/${id}`);
         return response.data;
@@ -60,18 +100,23 @@ export const journeyService = {
         return response.data;
     },
 
-    startJourney: async (id: number): Promise<Journey> => {
-        const response = await api.patch(`/journeys/${id}/start`);
+    startJourney: async (id: number, payload?: StartJourneyPayload): Promise<Journey> => {
+        const response = await api.post(`/journeys/${id}/start`, payload || {});
         return response.data;
     },
 
-    completeJourney: async (id: number): Promise<Journey> => {
-        const response = await api.patch(`/journeys/${id}/complete`);
+    updateLocation: async (id: number, payload: LocationUpdatePayload): Promise<Journey> => {
+        const response = await api.post(`/journeys/${id}/location`, payload);
+        return response.data;
+    },
+
+    completeJourney: async (id: number, sendSafeArrival: boolean = true): Promise<Journey> => {
+        const response = await api.post(`/journeys/${id}/complete`, { sendSafeArrival });
         return response.data;
     },
 
     cancelJourney: async (id: number): Promise<Journey> => {
-        const response = await api.patch(`/journeys/${id}/cancel`);
+        const response = await api.post(`/journeys/${id}/cancel`);
         return response.data;
     }
 };

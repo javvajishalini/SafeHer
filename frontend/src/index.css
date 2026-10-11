@@ -11,19 +11,27 @@
   --border-color: rgba(255, 255, 255, 0.5);
   --success: #10b981;
   --error: #ef4444;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --danger-gradient: linear-gradient(135deg, #f43f5e 0%, #ef4444 50%, #b91c1c 100%);
+  --danger-glow: 0 0 30px rgba(239, 68, 68, 0.55);
   --glass-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
   --glass-border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-color: #0f172a;
+    --bg-color: #0b0f19;
     --text-main: #f8fafc;
     --text-muted: #94a3b8;
-    --card-bg: rgba(30, 41, 59, 0.7);
+    --card-bg: rgba(17, 24, 39, 0.75);
     --border-color: rgba(255, 255, 255, 0.1);
     --glass-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
     --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+    --danger: #ef4444;
+    --danger-hover: #dc2626;
+    --danger-gradient: linear-gradient(135deg, #f43f5e 0%, #ef4444 50%, #b91c1c 100%);
+    --danger-glow: 0 0 35px rgba(239, 68, 68, 0.6);
   }
 }
 
@@ -263,3 +271,95 @@ a:hover {
     transform: translateY(0) rotateX(0);
   }
 }
+
+/* SOS Emergency Button Styles */
+.btn-danger {
+  background: var(--danger-gradient);
+  color: white;
+  box-shadow: var(--danger-glow);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-danger:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 0 45px rgba(239, 68, 68, 0.8);
+}
+
+.sos-emergency-btn {
+  width: 100%;
+  max-width: 440px;
+  padding: 2.2rem 2rem;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #991b1b 100%);
+  color: #ffffff;
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  border-radius: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  box-shadow: 0 15px 40px rgba(220, 38, 38, 0.55), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  position: relative;
+  animation: sosPulse 2.2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+.sos-emergency-btn:hover {
+  transform: translateY(-4px) scale(1.03);
+  box-shadow: 0 20px 50px rgba(220, 38, 38, 0.75), inset 0 2px 6px rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.sos-emergency-btn:active {
+  transform: scale(0.98);
+}
+
+@keyframes sosPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7), 0 12px 35px rgba(220, 38, 38, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 22px rgba(239, 68, 68, 0), 0 16px 45px rgba(220, 38, 38, 0.7);
+  }
+}
+
+/* Badges & Utilities */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-primary {
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.badge-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+

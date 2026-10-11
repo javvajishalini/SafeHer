@@ -2,8 +2,11 @@ package com.safeher.service;
 
 import com.safeher.dto.SOSRequest;
 import com.safeher.dto.SOSResponse;
+import com.safeher.model.Journey;
+import com.safeher.model.JourneyStatus;
 import com.safeher.model.SOSIncident;
 import com.safeher.model.SOSStatus;
+import com.safeher.repository.JourneyRepository;
 import com.safeher.repository.SOSIncidentRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -12,16 +15,15 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
 public class SOSService {
 
-    @Autowired
-    private SOSIncidentRepository sosRepository;
-
-    @Autowired
-    private NotificationService notificationService;
+    @Autowired private SOSIncidentRepository sosRepository;
+    @Autowired private NotificationService notificationService;
+    @Autowired private JourneyRepository journeyRepository;
 
     public SOSResponse activateSOS(Long userId, SOSRequest request) {
         SOSIncident incident = new SOSIncident();
@@ -30,21 +32,40 @@ public class SOSService {
         incident.setLongitude(request.getLongitude());
         incident.setAccuracy(request.getAccuracy());
         incident.setAddress(request.getAddress());
-        incident.setMessage(request.getMessage());
+        incident.setMessage(request.getMessage() != null ? request.getMessage()
+                : "EMERGENCY: User activated SOS from SafeHer platform.");
         incident.setStatus(SOSStatus.ACTIVE);
         incident.setTimestamp(Instant.now());
         incident.setCreatedAt(Instant.now());
 
         SOSIncident saved = sosRepository.save(incident);
 
-        // Trigger emergency notifications
+        // Look up whether user has an active smart journey to include in SOS alert
+        Optional<Journey> activeJourney = journeyRepository.findFirstByUserIdAndStatus(userId, JourneyStatus.ACTIVE);
+        if (!activeJourney.isPresent()) {
+            activeJourney = journeyRepository.findFirstByUserIdAndStatus(userId, JourneyStatus.OVERDUE);
+        }
+
         try {
-            notificationService.sendSOSNotifications(userId, saved);
+            notificationService.sendSOSNotifications(
+                    userId,
+                    saved,
+                    request.getEmergencyContactIds(),
+                    activeJourney.orElse(null)
+            );
         } catch (Exception e) {
-            // Log but don't fail the SOS activation
+            // Log but do NOT fail SOS activation — user safety takes priority
         }
 
         return mapToResponse(saved);
+    }
+
+    public SOSResponse getActiveSOS(Long userId) {
+        return sosRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .filter(s -> s.getStatus() == SOSStatus.ACTIVE)
+                .findFirst()
+                .map(this::mapToResponse)
+                .orElse(null);
     }
 
     public List<SOSResponse> getUserSOSHistory(Long userId) {
@@ -97,6 +118,9 @@ public class SOSService {
         response.setMessage(incident.getMessage());
         response.setResolvedAt(incident.getResolvedAt());
         response.setCreatedAt(incident.getCreatedAt());
+        if (incident.getLatitude() != null && incident.getLongitude() != null) {
+            response.setMapsUrl("https://www.google.com/maps?q=" + incident.getLatitude() + "," + incident.getLongitude());
+        }
         return response;
     }
 }
