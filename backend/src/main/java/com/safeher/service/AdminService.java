@@ -50,8 +50,8 @@ public class AdminService {
                         u.getFullName(),
                         u.getEmail(),
                         u.getPhoneNumber(),
-                        u.getRole().name(),
-                        u.getAccountStatus().name(),
+                        u.getRole() != null ? u.getRole().name() : "USER",
+                        u.getAccountStatus() != null ? u.getAccountStatus().name() : "ACTIVE",
                         u.getCreatedAt(),
                         u.getUpdatedAt()
                 ))
@@ -70,8 +70,8 @@ public class AdminService {
                     saved.getFullName(),
                     saved.getEmail(),
                     saved.getPhoneNumber(),
-                    saved.getRole().name(),
-                    saved.getAccountStatus().name(),
+                    saved.getRole() != null ? saved.getRole().name() : "USER",
+                    saved.getAccountStatus() != null ? saved.getAccountStatus().name() : "ACTIVE",
                     saved.getCreatedAt(),
                     saved.getUpdatedAt()
             );

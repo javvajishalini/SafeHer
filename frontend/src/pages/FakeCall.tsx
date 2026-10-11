@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from '../context/ToastContext';
 import { Phone, PhoneOff, User } from 'lucide-react';
 
 export const FakeCall: React.FC = () => {
+  const { info, warning } = useToast();
   const [caller, setCaller] = useState('Mom');
   const [customCaller, setCustomCaller] = useState('');
   const [delay, setDelay] = useState(0);
@@ -34,10 +36,11 @@ export const FakeCall: React.FC = () => {
 
   const handleSchedule = () => {
     if (caller === 'Custom' && !customCaller) {
-      alert('Please enter a custom caller name');
+      warning('Please enter a custom caller name');
       return;
     }
     setStatus('scheduled');
+    info(delay === 0 ? 'Triggering fake incoming call immediately...' : `Simulated incoming call scheduled in ${delay} seconds.`);
   };
 
   const handleEndCall = () => {

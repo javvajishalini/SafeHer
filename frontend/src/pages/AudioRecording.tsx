@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useToast } from '../context/ToastContext';
 import { 
   Mic, 
   Square, 
@@ -21,6 +22,7 @@ interface AudioRecordItem {
 }
 
 export const AudioRecording: React.FC = () => {
+  const { success, error: toastError, info, warning } = useToast();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordings, setRecordings] = useState<AudioRecordItem[]>([]);
@@ -40,7 +42,9 @@ export const AudioRecording: React.FC = () => {
   const startRecording = async () => {
     setError('');
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setError('Microphone recording is not supported in your browser.');
+      const msg = 'Microphone recording is not supported in your browser.';
+      setError(msg);
+      toastError(msg);
       return;
     }
 
@@ -68,6 +72,7 @@ export const AudioRecording: React.FC = () => {
         };
         setRecordings(prev => [newRecord, ...prev]);
         setRecordingDuration(0);
+        success("Audio recording finished and saved to evidence vault.");
 
         // Stop media stream tracks
         stream.getTracks().forEach(track => track.stop());
@@ -76,6 +81,7 @@ export const AudioRecording: React.FC = () => {
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingDuration(0);
+      info("Microphone recording active. Capturing evidence audio...");
 
       timerRef.current = setInterval(() => {
         setRecordingDuration(prev => prev + 1);
@@ -83,9 +89,13 @@ export const AudioRecording: React.FC = () => {
 
     } catch (err: any) {
       if (err.name === 'NotAllowedError') {
-        setError('Microphone permission was denied. Please allow microphone access in your browser settings.');
+        const msg = 'Microphone permission was denied. Please allow microphone access in your browser settings.';
+        setError(msg);
+        toastError(msg);
       } else {
-        setError('Failed to access microphone: ' + err.message);
+        const msg = 'Failed to access microphone: ' + err.message;
+        setError(msg);
+        toastError(msg);
       }
     }
   };
@@ -100,6 +110,7 @@ export const AudioRecording: React.FC = () => {
 
   const handleDelete = (id: string) => {
     setRecordings(prev => prev.filter(r => r.id !== id));
+    info("Audio recording deleted.");
   };
 
   const formatTime = (seconds: number) => {

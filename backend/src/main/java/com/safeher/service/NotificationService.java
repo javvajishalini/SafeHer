@@ -189,7 +189,6 @@ public class NotificationService {
     public void sendSMS(Long userId, EmergencyContact contact, String body,
                          Long sosId, Long journeyId) {
         Notification notification = newNotification(userId, "SMS", contact.getPhoneNumber(), "SOS/Journey Alert", body, sosId, journeyId, contact.getId());
-        notification.setProvider("TWILIO");
 
         if (!smsEnabled || twilioAccountSid.isBlank() || twilioAuthToken.isBlank() || twilioFromNumber.isBlank()) {
             notification.setStatus("FAILED");

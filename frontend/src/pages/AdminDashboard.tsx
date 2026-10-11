@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { adminService, type AdminStats } from '../services/admin.service';
 import { reportService, type IncidentReport } from '../services/report.service';
+import { useToast } from '../context/ToastContext';
 import { 
   ShieldAlert, 
   Users, 
@@ -11,7 +12,7 @@ import {
   Radio, 
   CheckCircle, 
   Clock, 
-  AlertTriangle,
+  AlertTriangle, 
   Database,
   Cpu,
   RefreshCw,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
+  const { success, error: toastError, info } = useToast();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [sosList, setSosList] = useState<any[]>([]);
@@ -61,9 +63,10 @@ export const AdminDashboard: React.FC = () => {
     const newStatus = currentStatus === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
     try {
       await adminService.updateUserStatus(userId, newStatus);
+      success(`User account status updated to ${newStatus}.`);
       loadData();
     } catch (e) {
-      alert("Failed to update user status.");
+      toastError("Failed to update user status.");
     }
   };
 
@@ -71,9 +74,10 @@ export const AdminDashboard: React.FC = () => {
     const notes = prompt("Enter moderation note for this incident report (optional):") || undefined;
     try {
       await reportService.updateReportStatusAdmin(reportId, status, notes);
+      success(`Incident report #${reportId} status updated to ${status}.`);
       loadData();
     } catch (e) {
-      alert("Failed to update report status.");
+      toastError("Failed to update report status.");
     }
   };
 
@@ -263,45 +267,53 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.92rem' }}>
+          <div className="table-responsive">
+            <table className="modern-table">
               <thead>
-                <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '0.75rem 1rem' }}>User</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Email</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Phone</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Role</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Status</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Actions</th>
+                <tr>
+                  <th>User</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredUsers.map(u => (
-                  <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '1rem', fontWeight: 600 }}>{u.fullName}</td>
-                    <td style={{ padding: '1rem', color: 'var(--text-muted)' }}>{u.email}</td>
-                    <td style={{ padding: '1rem' }}>{u.phoneNumber || 'N/A'}</td>
-                    <td style={{ padding: '1rem' }}>
-                      <span className={`badge ${u.role === 'ADMIN' ? 'badge-danger' : 'badge-primary'}`}>
-                        {u.role}
-                      </span>
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <span className={`badge ${u.accountStatus === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
-                        {u.accountStatus || 'ACTIVE'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '1rem' }}>
-                      <button 
-                        onClick={() => handleToggleUserStatus(u.id, u.accountStatus || 'ACTIVE')}
-                        className="btn" 
-                        style={{ width: 'auto', padding: '0.35rem 0.75rem', fontSize: '0.8rem', background: u.accountStatus === 'ACTIVE' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', color: u.accountStatus === 'ACTIVE' ? '#ef4444' : '#10b981' }}
-                      >
-                        {u.accountStatus === 'ACTIVE' ? 'Disable Account' : 'Activate'}
-                      </button>
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                      No matching users found.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredUsers.map(u => (
+                    <tr key={u.id}>
+                      <td style={{ fontWeight: 600 }}>{u.fullName}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>{u.email}</td>
+                      <td>{u.phoneNumber || 'N/A'}</td>
+                      <td>
+                        <span className={`badge ${u.role === 'ADMIN' ? 'badge-danger' : 'badge-primary'}`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${u.accountStatus === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>
+                          {u.accountStatus || 'ACTIVE'}
+                        </span>
+                      </td>
+                      <td>
+                        <button 
+                          onClick={() => handleToggleUserStatus(u.id, u.accountStatus || 'ACTIVE')}
+                          className="btn" 
+                          style={{ width: 'auto', padding: '0.35rem 0.85rem', fontSize: '0.8rem', background: u.accountStatus === 'ACTIVE' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', color: u.accountStatus === 'ACTIVE' ? '#ef4444' : '#10b981', border: 'none', borderRadius: '8px' }}
+                        >
+                          {u.accountStatus === 'ACTIVE' ? 'Disable Account' : 'Activate'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

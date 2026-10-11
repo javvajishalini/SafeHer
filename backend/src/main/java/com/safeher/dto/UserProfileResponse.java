@@ -1,6 +1,7 @@
 package com.safeher.dto;
 
 import com.safeher.model.Role;
+import java.time.Instant;
 
 public class UserProfileResponse {
     private Long id;
@@ -9,6 +10,9 @@ public class UserProfileResponse {
     private String phoneNumber;
     private Role role;
     private String profileImage;
+    private String accountStatus;
+    private Instant createdAt;
+    private Instant updatedAt;
 
     public UserProfileResponse() {}
 
@@ -19,6 +23,23 @@ public class UserProfileResponse {
         this.phoneNumber = phoneNumber;
         this.role = role;
         this.profileImage = profileImage;
+    }
+
+    public UserProfileResponse(Long id, String fullName, String email, String phoneNumber, String role, String accountStatus, Instant createdAt, Instant updatedAt) {
+        this.id = id;
+        this.fullName = fullName;
+        this.email = email;
+        this.phoneNumber = phoneNumber;
+        if (role != null) {
+            try {
+                this.role = Role.valueOf(role);
+            } catch (Exception e) {
+                this.role = Role.USER;
+            }
+        }
+        this.accountStatus = accountStatus;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
     }
 
     public Long getId() { return id; }
@@ -33,4 +54,10 @@ public class UserProfileResponse {
     public void setRole(Role role) { this.role = role; }
     public String getProfileImage() { return profileImage; }
     public void setProfileImage(String profileImage) { this.profileImage = profileImage; }
+    public String getAccountStatus() { return accountStatus; }
+    public void setAccountStatus(String accountStatus) { this.accountStatus = accountStatus; }
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 }

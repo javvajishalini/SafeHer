@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { diaryService } from '../services/diary.service';
+import { useToast } from '../context/ToastContext';
 import { 
   BookOpen, 
   PlusCircle, 
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 export const SafetyDiary: React.FC = () => {
+  const { success, error: toastError, warning } = useToast();
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -54,7 +56,7 @@ export const SafetyDiary: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.description.trim()) {
-      alert("Please enter title and description");
+      warning("Please provide a title and incident description for your private diary.");
       return;
     }
 
@@ -71,9 +73,10 @@ export const SafetyDiary: React.FC = () => {
         riskLevel: 'LOW',
         location: ''
       });
+      success("Diary entry saved securely in your private vault.");
       fetchEntries();
     } catch (e) {
-      alert("Failed to save diary entry.");
+      toastError("Failed to save diary entry. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -83,9 +86,10 @@ export const SafetyDiary: React.FC = () => {
     if (!window.confirm("Are you sure you want to delete this private diary log?")) return;
     try {
       await diaryService.deleteEntry(id);
+      success("Private diary log deleted.");
       fetchEntries();
     } catch (e) {
-      alert("Failed to delete entry.");
+      toastError("Failed to delete diary entry.");
     }
   };
 

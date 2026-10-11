@@ -1,16 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { authService } from '../services/auth.service';
+import { AuthContext, useAuth } from './useAuth';
 
-interface AuthContextType {
-  user: any;
-  isAuthenticated: boolean;
-  login: (credentials: any) => Promise<void>;
-  register: (data: any) => Promise<void>;
-  logout: () => void;
-  updateUserContext: (user: any) => void;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export { useAuth };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<any>(null);
@@ -41,11 +33,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserContext = (newUser: any) => {
     setUser((prev: any) => {
-        const updated = { ...prev, ...newUser };
-        localStorage.setItem('user', JSON.stringify(updated));
-        return updated;
+      const updated = { ...prev, ...newUser };
+      localStorage.setItem('user', JSON.stringify(updated));
+      return updated;
     });
-  }
+  };
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout, updateUserContext }}>
@@ -54,8 +46,3 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
-};

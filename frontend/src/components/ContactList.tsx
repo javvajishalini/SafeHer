@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { contactService } from '../services/contact.service';
+import { useToast } from '../context/ToastContext';
 import { ContactForm } from './ContactForm';
 import { 
   UserPlus, 
@@ -24,15 +25,19 @@ export const ContactList: React.FC<Props> = ({ contacts, refresh }) => {
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { success, error: toastError, info } = useToast();
 
   const handleDelete = async (id: number, name: string) => {
     if (!window.confirm(`Are you sure you want to remove "${name}" from your emergency contacts?`)) return;
     setLoading(true);
     try {
       await contactService.delete(id);
+      success(`Removed "${name}" from your emergency contacts.`);
       refresh();
     } catch (err: any) {
-      setError(err.response?.data?.message || err.response?.data || 'Failed to delete contact');
+      const msg = err.response?.data?.message || err.response?.data || 'Failed to delete contact';
+      setError(msg);
+      toastError(msg);
     } finally {
       setLoading(false);
     }
@@ -42,9 +47,12 @@ export const ContactList: React.FC<Props> = ({ contacts, refresh }) => {
     setLoading(true);
     try {
       await contactService.toggleStatus(id, !current);
+      info(!current ? 'Contact marked as active.' : 'Contact marked as inactive.');
       refresh();
     } catch (err: any) {
-      setError(err.response?.data?.message || err.response?.data || 'Failed to update contact status');
+      const msg = err.response?.data?.message || err.response?.data || 'Failed to update contact status';
+      setError(msg);
+      toastError(msg);
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { journeyService, JourneyStatus, type Journey, type CreateJourneyRequest } from '../services/journey.service';
 import { sosService } from '../services/sos.service';
+import { useToast } from '../context/ToastContext';
 import { JourneyList } from '../components/journey/JourneyList';
 import { JourneyForm } from '../components/journey/JourneyForm';
 import { 
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 export const JourneyPage: React.FC = () => {
+    const { success, error: toastError, warning, info } = useToast();
     const [journeys, setJourneys] = useState<Journey[]>([]);
     const [loading, setLoading] = useState(true);
     const [view, setView] = useState<'list' | 'create' | 'edit'>('list');
@@ -137,11 +139,11 @@ export const JourneyPage: React.FC = () => {
         setFormLoading(true);
         try {
             await journeyService.createJourney(data);
+            success('Smart Journey registered successfully with safety monitoring!');
             setView('list');
             loadJourneys();
         } catch (e) {
-            console.error(e);
-            alert("Failed to create journey");
+            toastError("Failed to register journey. Please verify inputs.");
         } finally {
             setFormLoading(false);
         }
@@ -152,12 +154,12 @@ export const JourneyPage: React.FC = () => {
         setFormLoading(true);
         try {
             await journeyService.updateJourney(editingJourney.id, data);
+            success('Smart Journey details updated.');
             setEditingJourney(null);
             setView('list');
             loadJourneys();
         } catch (e) {
-            console.error(e);
-            alert("Failed to update journey");
+            toastError("Failed to update journey.");
         } finally {
             setFormLoading(false);
         }
@@ -185,9 +187,10 @@ export const JourneyPage: React.FC = () => {
                     expectedDurationMinutes: durationMins
                 });
                 setActiveJourney(started);
+                success(`Smart Journey started! Automated arrival countdown and GPS tracking active.`);
                 loadJourneys();
             } catch (e) {
-                alert("Failed to start journey. Please try again.");
+                toastError("Failed to start journey. Please try again.");
             } finally {
                 setActionLoading(false);
             }
@@ -199,6 +202,7 @@ export const JourneyPage: React.FC = () => {
                     startWithCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
                 },
                 () => {
+                    warning("GPS permission unavailable. Starting journey with estimated schedule.");
                     startWithCoords(); // fallback without GPS
                 },
                 { enableHighAccuracy: true, timeout: 6000 }
@@ -215,10 +219,10 @@ export const JourneyPage: React.FC = () => {
         try {
             await journeyService.completeJourney(id, true);
             setActiveJourney(null);
+            success("Safe arrival confirmed! Notifications dispatched to your guardians.");
             loadJourneys();
-            alert("Journey completed! Safe arrival notifications dispatched to your guardians.");
         } catch (e) {
-            alert("Failed to complete journey");
+            toastError("Failed to complete journey.");
         } finally {
             setActionLoading(false);
         }
@@ -230,9 +234,10 @@ export const JourneyPage: React.FC = () => {
             try {
                 await journeyService.cancelJourney(id);
                 if (activeJourney?.id === id) setActiveJourney(null);
+                warning('Journey cancelled.');
                 loadJourneys();
             } catch (e) {
-                alert("Failed to cancel journey");
+                toastError("Failed to cancel journey.");
             } finally {
                 setActionLoading(false);
             }
@@ -252,18 +257,23 @@ export const JourneyPage: React.FC = () => {
                             accuracy: pos.coords.accuracy,
                             message: `TRANSIT EMERGENCY: Distress triggered during journey "${activeJourney?.title}".`
                         });
-                        alert("🚨 SOS EMERGENCY BROADCAST DISPATCHED TO CONTACTS!");
+                        toastError("🚨 TRANSIT SOS ACTIVATED: Emergency coordinates broadcast to contacts!");
                     } catch (e) {
-                        alert("Distress signal dispatched.");
+                        toastError("Emergency distress signal recorded.");
                     }
                 },
                 async () => {
                     await sosService.activateSOS({
                         message: `TRANSIT EMERGENCY: Distress triggered during journey "${activeJourney?.title}".`
                     });
-                    alert("🚨 SOS EMERGENCY BROADCAST DISPATCHED TO CONTACTS!");
+                    warning("🚨 Transit distress signal dispatched (Location unavailable).");
                 }
             );
+        } else {
+            await sosService.activateSOS({
+                message: `TRANSIT EMERGENCY: Distress triggered during journey "${activeJourney?.title}".`
+            });
+            warning("🚨 Transit distress signal dispatched.");
         }
     };
 

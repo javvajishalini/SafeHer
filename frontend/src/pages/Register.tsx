@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { Shield, User, Mail, Phone, Lock, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
 
 export const Register: React.FC = () => {
@@ -15,6 +16,7 @@ export const Register: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
+  const { success, error: toastError, warning } = useToast();
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -27,10 +29,12 @@ export const Register: React.FC = () => {
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
+      warning('Passwords do not match. Please verify your password confirmation.');
       return;
     }
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long');
+      warning('Password must be at least 6 characters long.');
       return;
     }
 
@@ -42,18 +46,20 @@ export const Register: React.FC = () => {
         phoneNumber: formData.phoneNumber.trim(),
         password: formData.password
       });
+      success('Account created successfully! Welcome to SafeHer.');
       navigate('/dashboard');
     } catch (err: any) {
       const msg = err.response?.data;
+      let errorMsg = 'Failed to create account. Please try again.';
       if (typeof msg === 'string') {
-        setError(msg);
+        errorMsg = msg;
       } else if (msg?.error) {
-        setError(msg.error);
+        errorMsg = msg.error;
       } else if (msg?.message) {
-        setError(msg.message);
-      } else {
-        setError('Failed to create account. Please try again.');
+        errorMsg = msg.message;
       }
+      setError(errorMsg);
+      toastError(errorMsg);
     } finally {
       setLoading(false);
     }

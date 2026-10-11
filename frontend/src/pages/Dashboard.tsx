@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { contactService } from '../services/contact.service';
 import { sosService, type SOSResponse } from '../services/sos.service';
 import { journeyService, JourneyStatus, type Journey } from '../services/journey.service';
@@ -28,6 +29,7 @@ import {
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const { success, error: toastError, warning, info } = useToast();
   const [activeCount, setActiveCount] = useState(0);
   const [contactsList, setContactsList] = useState<any[]>([]);
   const [selectedSosContactIds, setSelectedSosContactIds] = useState<number[]>([]);
@@ -138,8 +140,9 @@ export const Dashboard: React.FC = () => {
               accuracy: position.coords.accuracy
             });
             setActiveSOS(result);
+            toastError("🚨 EMERGENCY SOS BEACON ACTIVE: High-accuracy GPS coordinates broadcast to your emergency contacts.");
           } catch (e: any) {
-            alert("Emergency beacon recorded locally. Contacts notification dispatched.");
+            toastError("Emergency beacon recorded locally. Contacts notification dispatched.");
           } finally {
             setIsActivating(false);
             setLocationStatus('Ready');
@@ -153,8 +156,9 @@ export const Dashboard: React.FC = () => {
               message: "EMERGENCY: User activated SOS (Location unavailable)." 
             });
             setActiveSOS(result);
+            warning("🚨 SOS distress beacon dispatched (GPS location was unavailable).");
           } catch (e: any) {
-            alert("Emergency beacon recorded.");
+            toastError("Emergency beacon recorded.");
           } finally {
             setIsActivating(false);
             setLocationStatus('Ready');
@@ -164,8 +168,11 @@ export const Dashboard: React.FC = () => {
       );
     } else {
       sosService.activateSOS({ ...payloadBase, message: "EMERGENCY: User activated SOS (Browser GPS unsupported)." })
-        .then(res => setActiveSOS(res))
-        .catch(() => alert("Emergency alert sent."))
+        .then(res => {
+          setActiveSOS(res);
+          warning("🚨 SOS emergency distress beacon activated.");
+        })
+        .catch(() => toastError("Emergency alert recorded."))
         .finally(() => {
           setIsActivating(false);
           setLocationStatus('Ready');
@@ -178,8 +185,9 @@ export const Dashboard: React.FC = () => {
     try {
       await sosService.resolveSOS(activeSOS.id);
       setActiveSOS(null);
+      success("Status resolved: You are marked safe. Distress beacon deactivated.");
     } catch (e) {
-      alert("Failed to resolve SOS status.");
+      toastError("Failed to resolve SOS status. Please try again.");
     }
   };
 
@@ -189,40 +197,59 @@ export const Dashboard: React.FC = () => {
     try {
       await journeyService.completeJourney(activeJourney.id, true);
       setActiveJourney(null);
-      alert("Safe arrival confirmed! Your emergency contacts have been notified.");
+      success("Safe arrival confirmed! Your emergency contacts have been notified.");
     } catch (e) {
-      alert("Failed to complete journey.");
+      toastError("Failed to complete journey.");
     } finally {
       setCompletingJourney(false);
     }
   };
 
   return (
-    <div className="animate-fade-in" style={{ padding: '2rem 1.5rem', maxWidth: '1250px', margin: '0 auto' }}>
+    <div className="animate-fade-in" style={{ padding: '2.5rem 1.5rem', maxWidth: '1280px', margin: '0 auto' }}>
       
       {/* Top Welcome & Safety Status Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.25rem', marginBottom: '2.5rem' }}>
         <div>
-          <h1 style={{ fontSize: '2.4rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.5px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(99, 102, 241, 0.08)', color: 'var(--primary)', padding: '0.35rem 0.85rem', borderRadius: '9999px', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.65rem', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+            <ShieldCheck size={15} /> SafeHer Personal Defense Hub
+          </div>
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.025em', margin: 0 }}>
             {getGreeting()}, {user?.fullName || 'User'}
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '1.05rem', marginTop: '0.25rem' }}>
-            Your personal safety command center is active and monitoring.
+          <p style={{ color: 'var(--text-muted)', fontSize: '1.05rem', marginTop: '0.35rem' }}>
+            Your personal safety command center is active and monitoring in real time.
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--card-bg)', backdropFilter: 'blur(20px)', border: 'var(--glass-border)', padding: '0.6rem 1.25rem', borderRadius: '9999px', boxShadow: 'var(--glass-shadow)' }}>
-          <span style={{ 
-            width: '10px', 
-            height: '10px', 
-            borderRadius: '50%', 
-            backgroundColor: activeSOS ? '#ef4444' : activeJourney ? '#3b82f6' : '#10b981', 
-            display: 'inline-block', 
-            boxShadow: activeSOS ? '0 0 10px #ef4444' : activeJourney ? '0 0 10px #3b82f6' : '0 0 10px #10b981' 
-          }}></span>
-          <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)' }}>
-            Status: {activeSOS ? 'EMERGENCY BEACON ACTIVE' : activeJourney ? 'SMART JOURNEY IN TRANSIT' : 'PROTECTED'}
-          </span>
+        {/* Real-Time Telemetry Bar */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.6rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', background: 'var(--card-bg)', backdropFilter: 'blur(20px)', border: 'var(--glass-border)', padding: '0.55rem 1.15rem', borderRadius: '9999px', boxShadow: 'var(--glass-shadow)' }}>
+            <span style={{ 
+              width: '9px', 
+              height: '9px', 
+              borderRadius: '50%', 
+              backgroundColor: activeSOS ? '#ef4444' : activeJourney ? '#3b82f6' : '#10b981', 
+              display: 'inline-block', 
+              boxShadow: activeSOS ? '0 0 10px #ef4444' : activeJourney ? '0 0 10px #3b82f6' : '0 0 10px #10b981',
+              animation: 'sosPulse 2s infinite'
+            }}></span>
+            <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
+              System: {activeSOS ? 'EMERGENCY BEACON ACTIVE' : activeJourney ? 'SMART JOURNEY IN TRANSIT' : 'PROTECTED & READY'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <span className="badge badge-success" style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}>
+              <span className="badge-dot"></span> GPS Online
+            </span>
+            <span className="badge badge-primary" style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}>
+              <span className="badge-dot"></span> {activeCount} Armed Contacts
+            </span>
+            <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.12)', color: '#8b5cf6', fontSize: '0.75rem', padding: '0.25rem 0.65rem', border: '1px solid rgba(139, 92, 246, 0.25)' }}>
+              <Sparkles size={11} /> AI Shield Active
+            </span>
+          </div>
         </div>
       </div>
 

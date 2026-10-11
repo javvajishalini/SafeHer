@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { sosService, type SOSResponse } from '../services/sos.service';
+import { useToast } from '../context/ToastContext';
 import { 
   ShieldAlert, 
   MapPin, 
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 
 export const SOSHistory: React.FC = () => {
+  const { success, error: toastError, warning } = useToast();
   const [incidents, setIncidents] = useState<SOSResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'ALL' | 'ACTIVE' | 'RESOLVED' | 'CANCELLED'>('ALL');
@@ -37,9 +39,10 @@ export const SOSHistory: React.FC = () => {
   const handleResolve = async (id: number) => {
     try {
       await sosService.resolveSOS(id);
+      success(`SOS incident #${id} marked as resolved. You are safe.`);
       fetchHistory();
     } catch (e) {
-      alert("Failed to resolve SOS incident.");
+      toastError("Failed to resolve SOS incident.");
     }
   };
 
@@ -47,9 +50,10 @@ export const SOSHistory: React.FC = () => {
     if (!window.confirm("Are you sure you want to cancel this SOS incident?")) return;
     try {
       await sosService.cancelSOS(id);
+      warning(`SOS incident #${id} cancelled.`);
       fetchHistory();
     } catch (e) {
-      alert("Failed to cancel SOS incident.");
+      toastError("Failed to cancel SOS incident.");
     }
   };
 

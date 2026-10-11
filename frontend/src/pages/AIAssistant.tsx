@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { aiService, type AIAssistantMessage } from '../services/ai.service';
+import { useToast } from '../context/ToastContext';
 import { Sparkles, Send, Trash2, Bot, User as UserIcon, ShieldAlert, PhoneCall, AlertTriangle } from 'lucide-react';
 
 export const AIAssistant: React.FC = () => {
+  const { error: toastError, info } = useToast();
   const [messages, setMessages] = useState<AIAssistantMessage[]>([
     {
       sender: 'AI',
@@ -53,6 +55,7 @@ export const AIAssistant: React.FC = () => {
       };
       setMessages(prev => [...prev, aiMsg]);
     } catch (err) {
+      toastError("AI Assistant is offline or rate-limited. In an emergency, please dial 112.");
       const errorMsg: AIAssistantMessage = {
         sender: 'SYSTEM',
         message: "Unable to reach the AI engine right now. If you are in immediate danger, please call National Emergency (112) or Women Helpline (181).",
@@ -73,6 +76,7 @@ export const AIAssistant: React.FC = () => {
       }
     ]);
     setConversationId(undefined);
+    info("AI conversation cleared.");
   };
 
   return (

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { Shield, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
 
 export const Login: React.FC = () => {
@@ -10,6 +11,7 @@ export const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const { success, error: toastError } = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -18,18 +20,20 @@ export const Login: React.FC = () => {
     setLoading(true);
     try {
       await login({ email: email.trim(), password });
+      success('Logged in successfully! Welcome to SafeHer.');
       navigate('/dashboard');
     } catch (err: any) {
       const msg = err.response?.data;
+      let errorMsg = 'Failed to login. Please check your email and password.';
       if (typeof msg === 'string') {
-        setError(msg);
+        errorMsg = msg;
       } else if (msg?.error) {
-        setError(msg.error);
+        errorMsg = msg.error;
       } else if (msg?.message) {
-        setError(msg.message);
-      } else {
-        setError('Failed to login. Please check your email and password.');
+        errorMsg = msg.message;
       }
+      setError(errorMsg);
+      toastError(errorMsg);
     } finally {
       setLoading(false);
     }

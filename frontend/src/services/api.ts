@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { showToast } from '../context/ToastContext';
 
 const api = axios.create({
   baseURL: 'http://localhost:8080/api',
@@ -25,6 +26,7 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+        showToast.error('Your session has expired. Please sign in again.');
         window.location.href = '/login';
       }
     }

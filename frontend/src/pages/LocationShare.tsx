@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useToast } from '../context/ToastContext';
 import { 
   MapPin, 
   Share2, 
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 
 export const LocationShare: React.FC = () => {
+  const { success, error: toastError, info } = useToast();
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy?: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -24,7 +26,9 @@ export const LocationShare: React.FC = () => {
     setCopied(false);
 
     if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your current browser.');
+      const msg = 'Geolocation is not supported by your current browser.';
+      setError(msg);
+      toastError(msg);
       setLoading(false);
       return;
     }
@@ -38,16 +42,18 @@ export const LocationShare: React.FC = () => {
         });
         setTimestamp(new Date().toLocaleTimeString());
         setLoading(false);
+        success(`GPS coordinates locked (accuracy: ±${Math.round(pos.coords.accuracy)}m).`);
       },
       (err) => {
         setLoading(false);
+        let msg = 'Location request timed out. Please try again.';
         if (err.code === 1) {
-          setError('Location access was denied. Please allow location permissions in your browser settings.');
+          msg = 'Location access was denied. Please allow location permissions in your browser settings.';
         } else if (err.code === 2) {
-          setError('Position unavailable. Please ensure GPS / Location Services are enabled on your device.');
-        } else {
-          setError('Location request timed out. Please try again.');
+          msg = 'Position unavailable. Please ensure GPS / Location Services are enabled on your device.';
         }
+        setError(msg);
+        toastError(msg);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -62,6 +68,7 @@ export const LocationShare: React.FC = () => {
     if (!mapsUrl) return;
     navigator.clipboard.writeText(shareText);
     setCopied(true);
+    success("Google Maps live location link copied to clipboard.");
     setTimeout(() => setCopied(false), 2500);
   };
 
@@ -74,6 +81,7 @@ export const LocationShare: React.FC = () => {
           text: shareText,
           url: mapsUrl
         });
+        info("Location shared successfully.");
       } catch (err) {
         // Fallback to copy if cancelled or unsupported
         handleCopy();

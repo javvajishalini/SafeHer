@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { reportService, type IncidentReport } from '../services/report.service';
+import { useToast } from '../context/ToastContext';
 import { 
   FileText, 
   PlusCircle, 
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 
 export const IncidentReports: React.FC = () => {
+  const { success: toastSuccess, error: toastError, warning } = useToast();
   const [reports, setReports] = useState<IncidentReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -49,6 +51,7 @@ export const IncidentReports: React.FC = () => {
     e.preventDefault();
     if (!formData.description.trim()) {
       setError('Please provide a description of the incident.');
+      warning('Please provide a description of the incident.');
       return;
     }
 
@@ -59,6 +62,7 @@ export const IncidentReports: React.FC = () => {
     try {
       await reportService.createReport(formData);
       setSuccess('Incident report recorded successfully.');
+      toastSuccess('Incident report submitted and recorded successfully.');
       setShowModal(false);
       setFormData({
         incidentType: 'HARASSMENT',
@@ -69,7 +73,9 @@ export const IncidentReports: React.FC = () => {
       });
       fetchReports();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to submit incident report');
+      const msg = err.response?.data?.message || 'Failed to submit incident report';
+      setError(msg);
+      toastError(msg);
     } finally {
       setSubmitting(false);
     }

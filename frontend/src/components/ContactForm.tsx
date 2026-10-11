@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { contactService } from '../services/contact.service';
+import { useToast } from '../context/ToastContext';
 import { User, Phone, Mail, Heart, AlertCircle, Save, X } from 'lucide-react';
 
 type Props = {
@@ -18,6 +19,7 @@ export const ContactForm: React.FC<Props> = ({ contact, onSuccess, onCancel }) =
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { success, error: toastError, warning } = useToast();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -28,7 +30,9 @@ export const ContactForm: React.FC<Props> = ({ contact, onSuccess, onCancel }) =
     setError('');
 
     if (!formData.name.trim() || !formData.phoneNumber.trim() || !formData.relationship) {
-      setError('Please fill all required fields');
+      const valMsg = 'Please fill all required fields (Name, Phone, and Relationship)';
+      setError(valMsg);
+      warning(valMsg);
       return;
     }
 
@@ -43,16 +47,20 @@ export const ContactForm: React.FC<Props> = ({ contact, onSuccess, onCancel }) =
       };
       if (contact) {
         await contactService.update(contact.id, payload);
+        success(`Updated contact "${payload.name}" successfully.`);
       } else {
         await contactService.create(payload);
+        success(`Added "${payload.name}" to your emergency contacts circle.`);
       }
       onSuccess();
     } catch (err: any) {
       const msg = err.response?.data;
-      if (typeof msg === 'string') setError(msg);
-      else if (msg?.message) setError(msg.message);
-      else if (msg?.error) setError(msg.error);
-      else setError('Failed to save contact');
+      let errorMsg = 'Failed to save contact';
+      if (typeof msg === 'string') errorMsg = msg;
+      else if (msg?.message) errorMsg = msg.message;
+      else if (msg?.error) errorMsg = msg.error;
+      setError(errorMsg);
+      toastError(errorMsg);
     } finally {
       setLoading(false);
     }

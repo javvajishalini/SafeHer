@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { contactService } from '../services/contact.service';
+import { useToast } from '../context/ToastContext';
 import { ContactList } from '../components/ContactList';
 import { Users, ShieldCheck, PhoneCall, Info } from 'lucide-react';
 
 export const EmergencyContacts: React.FC = () => {
+  const { error: toastError } = useToast();
   const [contacts, setContacts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -14,10 +16,10 @@ export const EmergencyContacts: React.FC = () => {
       const data = await contactService.getAll();
       setContacts(data);
     } catch (err: any) {
-      const msg = err.response?.data;
-      if (typeof msg === 'string') setError(msg);
-      else if (msg?.message) setError(msg.message);
-      else setError('Failed to load emergency contacts');
+      const msg = err.response?.data?.message || err.response?.data || 'Failed to load emergency contacts';
+      const text = typeof msg === 'string' ? msg : 'Failed to load emergency contacts';
+      setError(text);
+      toastError(text);
     } finally {
       setLoading(false);
     }
