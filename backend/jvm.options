@@ -1,0 +1,30 @@
+# SafeHer Spring Boot Application - JVM Runtime Options
+# Optimized for Java 17 and high-throughput / low-latency safety workloads
+
+# Memory Configuration
+-Xms512m
+-Xmx2048m
+-XX:MetaspaceSize=128m
+-XX:MaxMetaspaceSize=512m
+
+# Garbage Collector Configuration (G1GC for predictable pause times)
+-XX:+UseG1GC
+-XX:InitiatingHeapOccupancyPercent=45
+-XX:G1ReservePercent=15
+-XX:MaxGCPauseMillis=200
+
+# Container Support & Dynamic Sizing
+-XX:+UseContainerSupport
+-XX:MaxRAMPercentage=75.0
+-XX:InitialRAMPercentage=50.0
+
+# Performance & Runtime Tuning
+-XX:+OptimizeStringConcat
+-Dfile.encoding=UTF-8
+-Djava.awt.headless=true
+-Dspring.backgroundpreinitializer.ignore=false
+
+# OOM Diagnostics & Reliability
+-XX:+HeapDumpOnOutOfMemoryError
+-XX:HeapDumpPath=./logs/heapdump.hprof
+-XX:+ExitOnOutOfMemoryError
