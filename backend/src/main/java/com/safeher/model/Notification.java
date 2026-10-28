@@ -14,7 +14,7 @@ public class Notification {
     private Long userId;
 
     @Column(nullable = false, length = 30)
-    private String type;
+    private String type; // SMS, EMAIL, PUSH
 
     @Column(length = 200)
     private String title;
@@ -23,16 +23,25 @@ public class Notification {
     private String message;
 
     @Column(nullable = false, length = 20)
-    private String status = "PENDING";
+    private String status = "PENDING"; // PENDING, SENT, DELIVERED, FAILED
 
     @Column
     private String recipient;
+
+    @Column(length = 50)
+    private String provider; // e.g. "Twilio", "JavaMail/SMTP", "Simulated"
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
     @Column(name = "related_sos_id")
     private Long relatedSosId;
+
+    @Column(name = "related_journey_id")
+    private Long relatedJourneyId;
+
+    @Column(name = "related_contact_id")
+    private Long relatedContactId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -42,7 +51,7 @@ public class Notification {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = Instant.now();
+        if (createdAt == null) createdAt = Instant.now();
     }
 
     public Long getId() { return id; }
@@ -59,10 +68,16 @@ public class Notification {
     public void setStatus(String status) { this.status = status; }
     public String getRecipient() { return recipient; }
     public void setRecipient(String recipient) { this.recipient = recipient; }
+    public String getProvider() { return provider; }
+    public void setProvider(String provider) { this.provider = provider; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
     public Long getRelatedSosId() { return relatedSosId; }
     public void setRelatedSosId(Long relatedSosId) { this.relatedSosId = relatedSosId; }
+    public Long getRelatedJourneyId() { return relatedJourneyId; }
+    public void setRelatedJourneyId(Long relatedJourneyId) { this.relatedJourneyId = relatedJourneyId; }
+    public Long getRelatedContactId() { return relatedContactId; }
+    public void setRelatedContactId(Long relatedContactId) { this.relatedContactId = relatedContactId; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getSentAt() { return sentAt; }

@@ -27,6 +27,16 @@ public class SOSController {
         return new ResponseEntity<>(sosService.activateSOS(userDetails.getId(), request), HttpStatus.CREATED);
     }
 
+    @GetMapping("/active")
+    public ResponseEntity<SOSResponse> getActiveSOS(
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        SOSResponse active = sosService.getActiveSOS(userDetails.getId());
+        if (active == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(active);
+    }
+
     @GetMapping("/history")
     public ResponseEntity<List<SOSResponse>> getHistory(
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
@@ -40,11 +50,25 @@ public class SOSController {
         return ResponseEntity.ok(sosService.getSOSIncident(id, userDetails.getId()));
     }
 
+    @PostMapping("/{id}/resolve")
+    public ResponseEntity<SOSResponse> resolveSOSPost(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        return ResponseEntity.ok(sosService.resolveSOS(id, userDetails.getId()));
+    }
+
     @PatchMapping("/{id}/resolve")
     public ResponseEntity<SOSResponse> resolveSOS(
             @PathVariable Long id,
             @AuthenticationPrincipal UserDetailsImpl userDetails) {
         return ResponseEntity.ok(sosService.resolveSOS(id, userDetails.getId()));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<SOSResponse> cancelSOSPost(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        return ResponseEntity.ok(sosService.cancelSOS(id, userDetails.getId()));
     }
 
     @PatchMapping("/{id}/cancel")

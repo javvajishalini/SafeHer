@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { diaryService } from '../services/diary.service';
+import { diaryService, type CreateDiaryRequest } from '../services/diary.service';
 import { useToast } from '../context/ToastContext';
 import { 
   BookOpen, 
@@ -34,7 +34,7 @@ export const SafetyDiary: React.FC = () => {
     incidentTime: new Date().toTimeString().slice(0, 5),
     incidentType: 'HARASSMENT',
     riskLevel: 'LOW',
-    location: ''
+    locationText: ''
   });
 
   const fetchEntries = async () => {
@@ -62,7 +62,17 @@ export const SafetyDiary: React.FC = () => {
 
     setSubmitting(true);
     try {
-      await diaryService.createEntry(formData);
+      // Convert the plain-text location string into the Location object the backend expects
+      const payload: CreateDiaryRequest = {
+        title: formData.title,
+        description: formData.description,
+        incidentDate: formData.incidentDate,
+        incidentTime: formData.incidentTime,
+        incidentType: formData.incidentType,
+        riskLevel: formData.riskLevel,
+        location: formData.locationText ? { address: formData.locationText } : undefined,
+      };
+      await diaryService.createEntry(payload);
       setShowForm(false);
       setFormData({
         title: '',
@@ -71,7 +81,7 @@ export const SafetyDiary: React.FC = () => {
         incidentTime: new Date().toTimeString().slice(0, 5),
         incidentType: 'HARASSMENT',
         riskLevel: 'LOW',
-        location: ''
+        locationText: ''
       });
       success("Diary entry saved securely in your private vault.");
       fetchEntries();
@@ -95,9 +105,11 @@ export const SafetyDiary: React.FC = () => {
 
   const filteredEntries = entries.filter(item => {
     const matchesRisk = filterRisk === 'ALL' || item.riskLevel === filterRisk;
+    // location is now a Location object {address, latitude, longitude}
+    const locationText = item.location?.address || '';
     const matchesSearch = item.title?.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           item.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          item.location?.toLowerCase().includes(searchQuery.toLowerCase());
+                          locationText.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesRisk && matchesSearch;
   });
 
@@ -203,8 +215,8 @@ export const SafetyDiary: React.FC = () => {
                   type="text" 
                   className="input-field" 
                   placeholder="e.g. Park Street Corner" 
-                  value={formData.location}
-                  onChange={e => setFormData({ ...formData, location: e.target.value })}
+                  value={formData.locationText}
+                  onChange={e => setFormData({ ...formData, locationText: e.target.value })}
                 />
               </div>
             </div>
@@ -342,9 +354,9 @@ export const SafetyDiary: React.FC = () => {
                       <span className="badge" style={{ background: `${riskColor}15`, color: riskColor, border: `1px solid ${riskColor}30`, fontSize: '0.75rem' }}>
                         {item.riskLevel} RISK
                       </span>
-                      {item.location && (
+                      {item.location?.address && (
                         <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <MapPin size={14} /> {item.location}
+                          <MapPin size={14} /> {item.location.address}
                         </span>
                       )}
                     </div>

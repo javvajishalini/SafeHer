@@ -2,11 +2,15 @@ package com.safeher.service;
 
 import com.safeher.dto.UserProfileResponse;
 import com.safeher.model.AccountStatus;
+import com.safeher.model.IncidentReport;
+import com.safeher.model.Journey;
+import com.safeher.model.JourneyStatus;
 import com.safeher.model.Role;
 import com.safeher.model.SOSIncident;
 import com.safeher.model.SOSStatus;
 import com.safeher.model.User;
 import com.safeher.repository.DiaryRepository;
+import com.safeher.repository.JourneyRepository;
 import com.safeher.repository.ReportRepository;
 import com.safeher.repository.SOSIncidentRepository;
 import com.safeher.repository.UserRepository;
@@ -25,12 +29,18 @@ public class AdminService {
     private final SOSIncidentRepository sosRepository;
     private final ReportRepository reportRepository;
     private final DiaryRepository diaryRepository;
+    private final JourneyRepository journeyRepository;
 
-    public AdminService(UserRepository userRepository, SOSIncidentRepository sosRepository, ReportRepository reportRepository, DiaryRepository diaryRepository) {
+    public AdminService(UserRepository userRepository,
+                        SOSIncidentRepository sosRepository,
+                        ReportRepository reportRepository,
+                        DiaryRepository diaryRepository,
+                        JourneyRepository journeyRepository) {
         this.userRepository = userRepository;
         this.sosRepository = sosRepository;
         this.reportRepository = reportRepository;
         this.diaryRepository = diaryRepository;
+        this.journeyRepository = journeyRepository;
     }
 
     public Map<String, Object> getDashboardStats() {
@@ -40,6 +50,8 @@ public class AdminService {
         stats.put("activeSosRecords", sosRepository.countByStatus(SOSStatus.ACTIVE));
         stats.put("totalIncidentReports", reportRepository.count());
         stats.put("totalDiaryEntries", diaryRepository.count());
+        stats.put("activeJourneys", journeyRepository.findByStatus(JourneyStatus.ACTIVE).size());
+        stats.put("overdueJourneys", journeyRepository.findByStatus(JourneyStatus.OVERDUE).size());
         return stats;
     }
 
@@ -80,6 +92,10 @@ public class AdminService {
         }
     }
 
+    /**
+     * Returns all SOS incidents enriched with user info and SOS type/journey details
+     * for the admin dashboard monitoring view.
+     */
     public List<Map<String, Object>> getAllSOSIncidents() {
         List<SOSIncident> incidents = sosRepository.findAllByOrderByCreatedAtDesc();
         Map<Long, User> userMap = userRepository.findAll().stream()
@@ -92,16 +108,90 @@ public class AdminService {
             User u = userMap.get(inc.getUserId());
             map.put("userName", u != null ? u.getFullName() : "User #" + inc.getUserId());
             map.put("userPhone", u != null ? u.getPhoneNumber() : "N/A");
+            map.put("userEmail", u != null ? u.getEmail() : "N/A");
             map.put("latitude", inc.getLatitude());
             map.put("longitude", inc.getLongitude());
             map.put("accuracy", inc.getAccuracy());
             map.put("address", inc.getAddress());
             map.put("message", inc.getMessage());
             map.put("status", inc.getStatus() != null ? inc.getStatus().name() : "ACTIVE");
+            // Include SOS type and journey link — previously missing from admin view
+            map.put("sosType", inc.getSosType() != null ? inc.getSosType().name() : "STANDARD");
+            map.put("journeyId", inc.getJourneyId());
             map.put("timestamp", inc.getTimestamp());
             map.put("resolvedAt", inc.getResolvedAt());
             map.put("createdAt", inc.getCreatedAt());
+            if (inc.getLatitude() != null && inc.getLongitude() != null) {
+                map.put("mapsUrl", "https://www.google.com/maps?q=" + inc.getLatitude() + "," + inc.getLongitude());
+            }
             return map;
         }).collect(Collectors.toList());
+    }
+
+    /**
+     * Returns all incident reports for the admin review panel.
+     */
+    public List<Map<String, Object>> getAllIncidentReports() {
+        List<IncidentReport> reports = reportRepository.findAllByOrderByCreatedAtDesc();
+        Map<Long, User> userMap = userRepository.findAll().stream()
+                .collect(Collectors.toMap(User::getId, u -> u, (u1, u2) -> u1));
+
+        return reports.stream().map(report -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", report.getId());
+            map.put("userId", report.getUserId());
+            User u = userMap.get(report.getUserId());
+            map.put("userName", u != null ? u.getFullName() : "User #" + report.getUserId());
+            map.put("userEmail", u != null ? u.getEmail() : "N/A");
+            map.put("incidentType", report.getIncidentType());
+            map.put("description", report.getDescription());
+            map.put("status", report.getStatus());
+            map.put("adminNotes", report.getAdminNotes());
+            map.put("incidentDate", report.getIncidentDate());
+            map.put("incidentTime", report.getIncidentTime());
+            if (report.getLocation() != null) {
+                map.put("locationAddress", report.getLocation().getAddress());
+                map.put("latitude", report.getLocation().getLatitude());
+                map.put("longitude", report.getLocation().getLongitude());
+            }
+            map.put("createdAt", report.getCreatedAt());
+            map.put("updatedAt", report.getUpdatedAt());
+            return map;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * Returns currently ACTIVE and OVERDUE journeys for admin situational awareness.
+     */
+    public List<Map<String, Object>> getActiveJourneys() {
+        List<Journey> active = journeyRepository.findByStatus(JourneyStatus.ACTIVE);
+        List<Journey> overdue = journeyRepository.findByStatus(JourneyStatus.OVERDUE);
+        Map<Long, User> userMap = userRepository.findAll().stream()
+                .collect(Collectors.toMap(User::getId, u -> u, (u1, u2) -> u1));
+
+        return java.util.stream.Stream.concat(active.stream(), overdue.stream())
+                .map(j -> {
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("id", j.getId());
+                    map.put("userId", j.getUserId());
+                    User u = userMap.get(j.getUserId());
+                    map.put("userName", u != null ? u.getFullName() : "User #" + j.getUserId());
+                    map.put("userPhone", u != null ? u.getPhoneNumber() : "N/A");
+                    map.put("title", j.getTitle());
+                    map.put("status", j.getStatus().name());
+                    map.put("startAddress", j.getStartLocation() != null ? j.getStartLocation().getAddress() : null);
+                    map.put("destAddress", j.getDestination() != null ? j.getDestination().getAddress() : null);
+                    map.put("expectedArrivalAt", j.getExpectedArrivalAt());
+                    map.put("lastLatitude", j.getLastLatitude());
+                    map.put("lastLongitude", j.getLastLongitude());
+                    map.put("lastLocationUpdate", j.getLastLocationUpdate());
+                    if (j.getLastLatitude() != null && j.getLastLongitude() != null) {
+                        map.put("lastLocationUrl", "https://www.google.com/maps?q=" + j.getLastLatitude() + "," + j.getLastLongitude());
+                    }
+                    map.put("startedAt", j.getStartedAt());
+                    map.put("overdueAlertSent", j.isOverdueAlertSent());
+                    return map;
+                })
+                .collect(Collectors.toList());
     }
 }

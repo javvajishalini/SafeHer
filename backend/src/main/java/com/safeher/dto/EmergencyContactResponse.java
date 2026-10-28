@@ -35,4 +35,6 @@ public class EmergencyContactResponse {
     public void setPriority(Integer priority) { this.priority = priority; }
     public boolean getIsActive() { return isActive; }
     public void setIsActive(boolean isActive) { this.isActive = isActive; }
+    public boolean isEmergencyContact() { return isActive; }
+    public boolean isPrimary() { return priority != null && priority == 1; }
 }

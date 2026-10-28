@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { contactService } from '../services/contact.service';
 import { sosService, type SOSResponse } from '../services/sos.service';
 import { journeyService, JourneyStatus, type Journey } from '../services/journey.service';
+import { ActiveSOSScreen } from '../components/ActiveSOSScreen';
 import { 
   ShieldAlert, 
   PhoneCall, 
@@ -24,7 +25,9 @@ import {
   FileText,
   AlertTriangle,
   ExternalLink,
-  X
+  Share2,
+  Plus,
+  EyeOff
 } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
@@ -44,6 +47,7 @@ export const Dashboard: React.FC = () => {
   const [completingJourney, setCompletingJourney] = useState(false);
 
   const countdownTimerRef = useRef<number | null>(null);
+  const pollingRef = useRef<number | null>(null);
 
   // Dynamic time-based greeting
   const getGreeting = () => {
@@ -77,6 +81,11 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+    // Real-time polling every 8s to update status without manual refresh
+    pollingRef.current = window.setInterval(fetchData, 8000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
   }, []);
 
   // Journey countdown logic
@@ -88,19 +97,21 @@ export const Dashboard: React.FC = () => {
 
     const tick = () => {
       const targetTime = new Date(activeJourney.expectedArrivalAt!).getTime();
-      const diffMs = targetTime - Date.now();
+      const now = Date.now();
+      const diffMs = targetTime - now;
+
       if (diffMs <= 0) {
         setIsJourneyOverdue(true);
         const overdueSecs = Math.abs(Math.floor(diffMs / 1000));
         const m = Math.floor(overdueSecs / 60);
         const s = overdueSecs % 60;
-        setJourneyCountdown(`+${m}m ${s < 10 ? '0' : ''}${s}s OVERDUE`);
+        setJourneyCountdown(`+${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s} OVERDUE`);
       } else {
         setIsJourneyOverdue(false);
         const remSecs = Math.floor(diffMs / 1000);
         const m = Math.floor(remSecs / 60);
         const s = remSecs % 60;
-        setJourneyCountdown(`${m}m ${s < 10 ? '0' : ''}${s}s`);
+        setJourneyCountdown(`${m < 10 ? '0' : ''}${m} : ${s < 10 ? '0' : ''}${s}`);
       }
     };
 
@@ -125,6 +136,7 @@ export const Dashboard: React.FC = () => {
 
     const payloadBase = {
       message: "EMERGENCY: User activated SOS distress beacon from SafeHer platform.",
+      emergencyContactIds: selectedSosContactIds.length > 0 ? selectedSosContactIds : undefined,
       contactIds: selectedSosContactIds.length > 0 ? selectedSosContactIds : undefined
     };
 
@@ -141,6 +153,7 @@ export const Dashboard: React.FC = () => {
             });
             setActiveSOS(result);
             toastError("🚨 EMERGENCY SOS BEACON ACTIVE: High-accuracy GPS coordinates broadcast to your emergency contacts.");
+            fetchData();
           } catch (e: any) {
             toastError("Emergency beacon recorded locally. Contacts notification dispatched.");
           } finally {
@@ -148,15 +161,16 @@ export const Dashboard: React.FC = () => {
             setLocationStatus('Ready');
           }
         },
-        async () => {
+        async (geoErr) => {
           try {
             setLocationStatus('Location access timed out. Triggering fallback distress signal...');
             const result = await sosService.activateSOS({ 
               ...payloadBase,
-              message: "EMERGENCY: User activated SOS (Location unavailable)." 
+              message: "EMERGENCY: User activated SOS (Location unavailable / permission denied)." 
             });
             setActiveSOS(result);
             warning("🚨 SOS distress beacon dispatched (GPS location was unavailable).");
+            fetchData();
           } catch (e: any) {
             toastError("Emergency beacon recorded.");
           } finally {
@@ -164,30 +178,20 @@ export const Dashboard: React.FC = () => {
             setLocationStatus('Ready');
           }
         },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
     } else {
       sosService.activateSOS({ ...payloadBase, message: "EMERGENCY: User activated SOS (Browser GPS unsupported)." })
         .then(res => {
           setActiveSOS(res);
           warning("🚨 SOS emergency distress beacon activated.");
+          fetchData();
         })
         .catch(() => toastError("Emergency alert recorded."))
         .finally(() => {
           setIsActivating(false);
           setLocationStatus('Ready');
         });
-    }
-  };
-
-  const handleMarkSafe = async () => {
-    if (!activeSOS) return;
-    try {
-      await sosService.resolveSOS(activeSOS.id);
-      setActiveSOS(null);
-      success("Status resolved: You are marked safe. Distress beacon deactivated.");
-    } catch (e) {
-      toastError("Failed to resolve SOS status. Please try again.");
     }
   };
 
@@ -198,10 +202,30 @@ export const Dashboard: React.FC = () => {
       await journeyService.completeJourney(activeJourney.id, true);
       setActiveJourney(null);
       success("Safe arrival confirmed! Your emergency contacts have been notified.");
+      fetchData();
     } catch (e) {
       toastError("Failed to complete journey.");
     } finally {
       setCompletingJourney(false);
+    }
+  };
+
+  const handleShareJourney = async () => {
+    if (!activeJourney) return;
+    const shareText = `🛡️ SAFEHER SMART JOURNEY: I am traveling from ${activeJourney.startLocation?.address || 'Current Location'} to ${activeJourney.destination?.address || 'Destination'}. Status: ${activeJourney.status}. ETA remaining: ${journeyCountdown}.`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'SafeHer Smart Journey Live Status',
+          text: shareText,
+          url: activeJourney.lastLocationUrl || window.location.href
+        });
+        success("Journey details shared.");
+      } catch (err) {}
+    } else {
+      await navigator.clipboard.writeText(shareText);
+      info("Journey status copied to clipboard!");
     }
   };
 
@@ -212,7 +236,7 @@ export const Dashboard: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.25rem', marginBottom: '2.5rem' }}>
         <div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(99, 102, 241, 0.08)', color: 'var(--primary)', padding: '0.35rem 0.85rem', borderRadius: '9999px', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.65rem', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
-            <ShieldCheck size={15} /> SafeHer Personal Defense Hub
+            <ShieldCheck size={15} /> SafeHer Personal Safety &amp; Emergency Hub
           </div>
           <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-main)', letterSpacing: '-0.025em', margin: 0 }}>
             {getGreeting()}, {user?.fullName || 'User'}
@@ -229,13 +253,13 @@ export const Dashboard: React.FC = () => {
               width: '9px', 
               height: '9px', 
               borderRadius: '50%', 
-              backgroundColor: activeSOS ? '#ef4444' : activeJourney ? '#3b82f6' : '#10b981', 
+              backgroundColor: activeSOS ? '#ef4444' : activeJourney ? (isJourneyOverdue ? '#ef4444' : '#3b82f6') : '#10b981', 
               display: 'inline-block', 
               boxShadow: activeSOS ? '0 0 10px #ef4444' : activeJourney ? '0 0 10px #3b82f6' : '0 0 10px #10b981',
               animation: 'sosPulse 2s infinite'
             }}></span>
             <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', letterSpacing: '-0.01em' }}>
-              System: {activeSOS ? 'EMERGENCY BEACON ACTIVE' : activeJourney ? 'SMART JOURNEY IN TRANSIT' : 'PROTECTED & READY'}
+              System: {activeSOS ? 'EMERGENCY BEACON ACTIVE' : activeJourney ? (isJourneyOverdue ? 'JOURNEY OVERDUE' : 'SMART JOURNEY IN TRANSIT') : 'PROTECTED & READY'}
             </span>
           </div>
 
@@ -253,90 +277,17 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* ─── ACTIVE SOS BEACON BANNER ────────────────────────────────────────── */}
+      {/* ─── 1. DEDICATED ACTIVE SOS SCREEN (Requirement 6) ────────────────── */}
       {activeSOS ? (
-        <div className="card" style={{ 
-          marginBottom: '2.5rem', 
-          border: '2px solid #ef4444', 
-          backgroundColor: 'rgba(239, 68, 68, 0.08)',
-          boxShadow: '0 10px 40px rgba(239, 68, 68, 0.25)',
-          padding: '2.5rem 2rem',
-          textAlign: 'center'
-        }}>
-          <div style={{ display: 'inline-flex', padding: '1rem', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', marginBottom: '1rem' }}>
-            <ShieldAlert size={48} />
-          </div>
-          <h2 style={{ color: '#ef4444', fontSize: '2.2rem', fontWeight: 800, letterSpacing: '1px' }}>
-            🚨 SOS DISTRESS BEACON ACTIVE
-          </h2>
-          <p style={{ maxWidth: '650px', margin: '0.75rem auto 1rem', color: 'var(--text-main)', fontSize: '1.1rem' }}>
-            Emergency broadcast was dispatched at <strong>{new Date(activeSOS.timestamp || activeSOS.createdAt || Date.now()).toLocaleTimeString()}</strong>. Your selected contacts have been notified with live distress coordinates.
-          </p>
-
-          {/* GPS Coordinates and Maps link */}
-          {(activeSOS.mapsUrl || (activeSOS.latitude && activeSOS.longitude)) && (
-            <div style={{ marginBottom: '1.5rem' }}>
-              <a 
-                href={activeSOS.mapsUrl || `https://www.google.com/maps?q=${activeSOS.latitude},${activeSOS.longitude}`} 
-                target="_blank" 
-                rel="noreferrer"
-                style={{ 
-                  display: 'inline-flex', 
-                  alignItems: 'center', 
-                  gap: '0.4rem', 
-                  color: '#ef4444', 
-                  fontWeight: 700, 
-                  fontSize: '1rem',
-                  textDecoration: 'underline' 
-                }}
-              >
-                <MapPin size={18} /> View Distress Location On Google Maps ({activeSOS.latitude?.toFixed(4)}, {activeSOS.longitude?.toFixed(4)}) <ExternalLink size={15} />
-              </a>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <a 
-              href="tel:112" 
-              className="btn" 
-              style={{ 
-                backgroundColor: '#dc2626', 
-                color: 'white', 
-                padding: '0.9rem 2rem', 
-                fontSize: '1.1rem', 
-                fontWeight: 700, 
-                width: 'auto', 
-                borderRadius: '12px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                boxShadow: '0 6px 20px rgba(220, 38, 38, 0.4)'
-              }}
-            >
-              <PhoneCall size={20} /> Call Emergency (112)
-            </a>
-            <button 
-              onClick={handleMarkSafe} 
-              className="btn" 
-              style={{ 
-                backgroundColor: '#10b981', 
-                color: 'white', 
-                padding: '0.9rem 2rem', 
-                fontSize: '1.1rem', 
-                fontWeight: 700, 
-                width: 'auto', 
-                borderRadius: '12px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                boxShadow: '0 6px 20px rgba(16, 185, 129, 0.3)'
-              }}
-            >
-              <CheckCircle size={20} /> I am Safe (Resolve SOS)
-            </button>
-          </div>
-        </div>
+        <ActiveSOSScreen 
+          incident={activeSOS} 
+          onResolved={() => {
+            setActiveSOS(null);
+            fetchData();
+          }} 
+        />
       ) : (
+        /* PROMINENT SOS ACTIVATION BUTTON & HERO CARD (Requirement 1 & 5) */
         <div className="card" style={{ 
           marginBottom: '2rem', 
           display: 'flex', 
@@ -345,7 +296,8 @@ export const Dashboard: React.FC = () => {
           textAlign: 'center',
           background: 'linear-gradient(180deg, rgba(239, 68, 68, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%)',
           border: '1px solid rgba(239, 68, 68, 0.25)',
-          padding: '3rem 2rem'
+          padding: '3rem 2rem',
+          borderRadius: '20px'
         }}>
           <div style={{ marginBottom: '1.5rem', maxWidth: '600px' }}>
             <span className="badge badge-danger" style={{ marginBottom: '0.75rem' }}>
@@ -359,8 +311,10 @@ export const Dashboard: React.FC = () => {
             </p>
           </div>
 
-          {/* RED SOS BUTTON */}
+          {/* LARGE EASY-TO-PRESS SOS BUTTON */}
           <button 
+            type="button"
+            id="sos-main-btn"
             onClick={() => setShowConfirmModal(true)}
             disabled={isActivating}
             className="sos-emergency-btn"
@@ -374,111 +328,335 @@ export const Dashboard: React.FC = () => {
               {isActivating ? locationStatus : 'Tap to instantly broadcast location & alert contacts'}
             </span>
           </button>
+
+          {/* SECONDARY SOS MODE BUTTONS */}
+          <div style={{ display: 'flex', gap: '0.85rem', marginTop: '1.25rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {/* Silent / Discreet SOS */}
+            <button
+              id="sos-silent-btn"
+              type="button"
+              disabled={isActivating}
+              onClick={() => {
+                if (!window.confirm("Activate SILENT SOS? This will quietly alert your emergency contacts without any loud alarm. Use this if making a visible distress signal could put you in more danger.")) return;
+                setIsActivating(true);
+                setLocationStatus('Acquiring location for stealth alert...');
+                const payload = {
+                  sosType: 'SILENT' as const,
+                  emergencyContactIds: selectedSosContactIds.length > 0 ? selectedSosContactIds : undefined,
+                };
+                const finalize = (result: any) => { setActiveSOS(result); fetchData(); setIsActivating(false); setLocationStatus('Ready'); };
+                if (navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(
+                    async (pos) => {
+                      try {
+                        const res = await sosService.activateSOS({ ...payload, latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
+                        finalize(res);
+                      } catch { setIsActivating(false); }
+                    },
+                    async () => { try { const res = await sosService.activateSOS(payload); finalize(res); } catch { setIsActivating(false); } },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                  );
+                } else {
+                  sosService.activateSOS(payload).then(finalize).catch(() => setIsActivating(false));
+                }
+              }}
+              title="Silent/Discreet SOS – no visible alarm, covert alert"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                background: 'rgba(139, 92, 246, 0.12)',
+                color: '#8b5cf6',
+                border: '1px solid rgba(139, 92, 246, 0.4)',
+                borderRadius: '12px',
+                padding: '0.7rem 1.25rem',
+                fontSize: '0.88rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                letterSpacing: '0.3px'
+              }}
+            >
+              <EyeOff size={16} />
+              Silent / Discreet SOS
+            </button>
+
+            {/* In-Journey SOS — shows when there's an active journey */}
+            {activeJourney && (
+              <button
+                id="sos-journey-btn"
+                type="button"
+                disabled={isActivating}
+                onClick={() => {
+                  if (!window.confirm("Activate IN-JOURNEY SOS? This will immediately alert your emergency contacts with your current location and journey details.")) return;
+                  setIsActivating(true);
+                  setLocationStatus('Acquiring location...');
+                  const payload = {
+                    sosType: 'IN_JOURNEY' as const,
+                    journeyId: activeJourney.id,
+                    emergencyContactIds: selectedSosContactIds.length > 0 ? selectedSosContactIds : undefined,
+                  };
+                  const finalize = (result: any) => { setActiveSOS(result); fetchData(); setIsActivating(false); setLocationStatus('Ready'); };
+                  if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                      async (pos) => {
+                        try {
+                          const res = await sosService.activateSOS({ ...payload, latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy });
+                          finalize(res);
+                        } catch { setIsActivating(false); }
+                      },
+                      async () => { try { const res = await sosService.activateSOS(payload); finalize(res); } catch { setIsActivating(false); } },
+                      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                    );
+                  } else {
+                    sosService.activateSOS(payload).then(finalize).catch(() => setIsActivating(false));
+                  }
+                }}
+                title="In-Journey Emergency SOS – attach to active Smart Journey"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                  background: 'rgba(59, 130, 246, 0.12)',
+                  color: '#3b82f6',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  borderRadius: '12px',
+                  padding: '0.7rem 1.25rem',
+                  fontSize: '0.88rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  letterSpacing: '0.3px'
+                }}
+              >
+                <Navigation size={16} />
+                In-Journey Emergency SOS
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ─── ACTIVE SMART JOURNEY WIDGET (IF IN TRANSIT) ───────────────────── */}
-      {activeJourney && (
+      {/* ─── 2. SMART JOURNEY WIDGET ON DASHBOARD (Requirement 11, 12, 26) ──── */}
+      {activeJourney ? (
         <div 
           className="card animate-slide-up" 
           style={{ 
             marginBottom: '2.5rem', 
-            padding: '1.75rem 2rem',
-            border: isJourneyOverdue ? '2px solid #ef4444' : '1px solid rgba(59, 130, 246, 0.4)',
+            padding: '2rem',
+            border: isJourneyOverdue ? '2px solid #ef4444' : '2px solid var(--primary)',
             background: isJourneyOverdue 
-              ? 'rgba(239, 68, 68, 0.08)' 
-              : 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(99, 102, 241, 0.04) 100%)',
-            boxShadow: isJourneyOverdue ? '0 8px 30px rgba(239, 68, 68, 0.2)' : '0 8px 25px rgba(59, 130, 246, 0.15)'
+              ? 'linear-gradient(180deg, rgba(239, 68, 68, 0.08) 0%, rgba(15, 23, 42, 0.02) 100%)' 
+              : 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(59, 130, 246, 0.04) 100%)',
+            boxShadow: isJourneyOverdue ? '0 10px 35px rgba(239, 68, 68, 0.25)' : '0 10px 30px rgba(99, 102, 241, 0.15)',
+            borderRadius: '18px'
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
               <div style={{ 
                 padding: '0.85rem', 
                 borderRadius: '14px', 
-                background: isJourneyOverdue ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.15)',
-                color: isJourneyOverdue ? '#ef4444' : '#3b82f6'
+                background: isJourneyOverdue ? 'rgba(239, 68, 68, 0.2)' : 'rgba(99, 102, 241, 0.15)',
+                color: isJourneyOverdue ? '#ef4444' : 'var(--primary)'
               }}>
                 <Navigation size={28} />
               </div>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ 
-                    padding: '0.2rem 0.6rem', 
+                    padding: '0.2rem 0.65rem', 
                     borderRadius: '9999px', 
                     fontSize: '0.75rem', 
                     fontWeight: 800,
                     background: isJourneyOverdue ? '#ef4444' : '#10b981',
                     color: 'white'
                   }}>
-                    {isJourneyOverdue ? 'OVERDUE TRIP' : 'IN TRANSIT'}
+                    {isJourneyOverdue ? '⚠️ JOURNEY OVERDUE' : '🛡️ SMART JOURNEY ACTIVE'}
                   </span>
                   <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    To: <strong>{activeJourney.destination?.address}</strong>
+                    Safety Buffer: +{activeJourney.safetyBufferMinutes ?? 0}m
                   </span>
                 </div>
-                <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.2rem', margin: 0 }}>
+                <h3 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '0.2rem', margin: 0 }}>
                   {activeJourney.title}
                 </h3>
               </div>
             </div>
 
-            {/* COUNTDOWN & ACTIONS */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.75rem', color: isJourneyOverdue ? '#ef4444' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
-                  {isJourneyOverdue ? 'Overdue Elapsed' : 'Expected In'}
-                </div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 900, fontFamily: 'monospace', color: isJourneyOverdue ? '#ef4444' : 'var(--text-main)' }}>
-                  {journeyCountdown}
-                </div>
+            {/* REAL COUNTDOWN DISPLAY */}
+            <div style={{
+              textAlign: 'right',
+              padding: '0.65rem 1.4rem',
+              borderRadius: '12px',
+              background: isJourneyOverdue ? 'rgba(239, 68, 68, 0.15)' : 'rgba(99, 102, 241, 0.12)',
+              border: isJourneyOverdue ? '1px solid #ef4444' : '1px solid rgba(99, 102, 241, 0.25)'
+            }}>
+              <div style={{ fontSize: '0.75rem', color: isJourneyOverdue ? '#ef4444' : 'var(--primary)', fontWeight: 800, textTransform: 'uppercase' }}>
+                {isJourneyOverdue ? 'Overdue Elapsed' : '⏱ Time Remaining'}
               </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button 
-                  onClick={handleCompleteActiveJourney}
-                  disabled={completingJourney}
-                  className="btn"
-                  style={{ 
-                    background: '#10b981', 
-                    color: 'white', 
-                    padding: '0.65rem 1.25rem', 
-                    fontSize: '0.95rem', 
-                    fontWeight: 700, 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    gap: '0.4rem',
-                    width: 'auto',
-                    borderRadius: '8px'
-                  }}
-                >
-                  <CheckCircle size={16} /> Arrived Safely
-                </button>
-                <Link 
-                  to="/journey" 
-                  className="btn"
-                  style={{ 
-                    background: 'transparent', 
-                    border: '1px solid var(--border-color)', 
-                    padding: '0.65rem 1.1rem', 
-                    fontSize: '0.95rem',
-                    color: 'var(--text-main)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    width: 'auto',
-                    borderRadius: '8px'
-                  }}
-                >
-                  Live Journey Center <ArrowRight size={15} />
-                </Link>
+              <div style={{ fontSize: '1.85rem', fontWeight: 900, fontFamily: 'monospace', color: isJourneyOverdue ? '#ef4444' : 'var(--text-main)', letterSpacing: '1px' }}>
+                {journeyCountdown}
               </div>
             </div>
           </div>
+
+          {/* Journey Path Info */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: '1rem',
+            padding: '1.1rem 1.25rem',
+            background: 'var(--bg-secondary)',
+            borderRadius: '12px',
+            marginBottom: '1.5rem'
+          }}>
+            <div>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>📍 Current Location</span>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                {activeJourney.startLocation?.address || 'En route'}
+              </div>
+              {activeJourney.lastLocationUpdate && (
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Last updated: {new Date(activeJourney.lastLocationUpdate).toLocaleTimeString()}
+                </span>
+              )}
+            </div>
+
+            <div>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>🏁 Destination</span>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                {activeJourney.destination?.address || 'Designated Stop'}
+              </div>
+            </div>
+
+            <div>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>👥 Guardians Watching</span>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                {activeJourney.emergencyContacts && activeJourney.emergencyContacts.length > 0 
+                  ? activeJourney.emergencyContacts.map(c => c.name).join(', ')
+                  : 'All Armed Contacts'}
+              </div>
+            </div>
+          </div>
+
+          {/* Active Journey Buttons: VIEW ROUTE, SHARE JOURNEY, END JOURNEY */}
+          <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            <Link
+              to="/journey"
+              className="btn btn-primary"
+              style={{
+                width: 'auto',
+                padding: '0.75rem 1.4rem',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                borderRadius: '8px'
+              }}
+            >
+              <Navigation size={16} /> VIEW ROUTE
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleShareJourney}
+              className="btn"
+              style={{
+                width: 'auto',
+                padding: '0.75rem 1.3rem',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                borderRadius: '8px',
+                background: 'var(--card-bg)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-main)'
+              }}
+            >
+              <Share2 size={16} /> SHARE JOURNEY
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCompleteActiveJourney}
+              disabled={completingJourney}
+              className="btn"
+              style={{
+                width: 'auto',
+                padding: '0.75rem 1.5rem',
+                fontWeight: 800,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                borderRadius: '8px',
+                background: '#10b981',
+                color: '#ffffff',
+                boxShadow: '0 4px 15px rgba(16, 185, 129, 0.35)'
+              }}
+            >
+              <CheckCircle size={16} /> END JOURNEY (ARRIVED SAFELY)
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* NO ACTIVE JOURNEY CARD (Requirement 12) */
+        <div 
+          className="card" 
+          style={{ 
+            marginBottom: '2.5rem', 
+            padding: '1.75rem 2rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '1.25rem',
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%)',
+            border: '1px solid rgba(99, 102, 241, 0.2)',
+            borderRadius: '16px'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{
+              padding: '0.85rem',
+              borderRadius: '14px',
+              background: 'rgba(99, 102, 241, 0.1)',
+              color: 'var(--primary)'
+            }}>
+              <Navigation size={28} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                🛡️ Smart Journey
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', margin: '0.2rem 0 0' }}>
+                No active Smart Journey
+              </h3>
+              <p style={{ margin: '0.2rem 0 0', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
+                Set up automated GPS tracking with an arrival countdown timer and safety buffer for your trips.
+              </p>
+            </div>
+          </div>
+
+          <Link
+            to="/journey"
+            className="btn btn-primary"
+            style={{
+              width: 'auto',
+              padding: '0.8rem 1.6rem',
+              fontWeight: 800,
+              fontSize: '0.95rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              borderRadius: '10px',
+              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)'
+            }}
+          >
+            <Plus size={18} /> CREATE SMART JOURNEY
+          </Link>
         </div>
       )}
 
-      {/* ─── SOS CONFIRMATION MODAL WITH GUARDIAN SELECTION ────────────────── */}
+      {/* ─── SOS CONFIRMATION MODAL (Requirement 5) ────────────────────────── */}
       {showConfirmModal && (
         <div style={{
           position: 'fixed',
@@ -494,53 +672,60 @@ export const Dashboard: React.FC = () => {
           zIndex: 1000,
           padding: '1.5rem'
         }}>
-          <div className="card animate-slide-up" style={{ width: '100%', maxWidth: '520px', padding: '2.5rem', textAlign: 'center', border: '2px solid #ef4444' }}>
-            <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
-              <AlertTriangle size={32} />
+          <div className="card animate-slide-up" style={{ width: '100%', maxWidth: '520px', padding: '2.5rem', textAlign: 'center', border: '2px solid #ef4444', borderRadius: '20px' }}>
+            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem', animation: 'pulse 1.5s infinite' }}>
+              <AlertTriangle size={34} />
             </div>
 
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#ef4444', marginBottom: '0.5rem' }}>
-              Confirm Emergency SOS Activation
+            <h3 style={{ fontSize: '1.6rem', fontWeight: 900, color: '#ef4444', marginBottom: '0.5rem' }}>
+              Are you sure you want to activate SOS?
             </h3>
-            <p style={{ color: 'var(--text-main)', fontSize: '0.95rem', marginBottom: '1.25rem', lineHeight: 1.5 }}>
-              Are you in danger? This queries your real-time GPS coordinates and immediately transmits an urgent distress beacon with Google Maps links to your emergency contacts.
+            <p style={{ color: 'var(--text-main)', fontSize: '0.95rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              Your selected emergency contacts will be notified immediately with your current real-time GPS coordinates and Google Maps distress link.
             </p>
 
             {/* Contacts To Notify Selector */}
-            {contactsList.length > 0 && (
-              <div style={{ textAlign: 'left', marginBottom: '1.5rem', background: 'var(--bg-secondary)', padding: '1rem', borderRadius: '10px' }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+            {contactsList.length > 0 ? (
+              <div style={{ textAlign: 'left', marginBottom: '1.5rem', background: 'var(--bg-secondary)', padding: '1.1rem', borderRadius: '12px' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
                   Contacts to alert ({selectedSosContactIds.length}/{contactsList.length} selected):
                 </span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.5rem', maxHeight: '110px', overflowY: 'auto' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.6rem', maxHeight: '130px', overflowY: 'auto' }}>
                   {contactsList.map(c => (
-                    <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                    <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.88rem', cursor: 'pointer', padding: '0.2rem 0' }}>
                       <input 
                         type="checkbox" 
                         checked={selectedSosContactIds.includes(c.id)} 
                         onChange={() => toggleSosContact(c.id)} 
+                        style={{ cursor: 'pointer' }}
                       />
-                      <span><strong>{c.name}</strong> {c.relationship ? `(${c.relationship})` : ''} - {c.phoneNumber || c.email}</span>
+                      <span><strong>{c.name}</strong> {c.relationship ? `(${c.relationship})` : ''} – {c.phoneNumber || c.email}</span>
                     </label>
                   ))}
                 </div>
+              </div>
+            ) : (
+              <div style={{ marginBottom: '1.5rem', padding: '0.75rem', background: '#fee2e2', color: '#b91c1c', borderRadius: '8px', fontSize: '0.85rem' }}>
+                ⚠️ No emergency contacts configured. SOS will be recorded and Universal Police (112) is available.
               </div>
             )}
 
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
               <button 
+                type="button"
                 onClick={() => setShowConfirmModal(false)}
                 className="btn"
-                style={{ width: 'auto', padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--border-color)' }}
+                style={{ width: 'auto', padding: '0.85rem 1.6rem', background: 'transparent', border: '1px solid var(--border-color)', fontWeight: 600 }}
               >
-                Cancel
+                CANCEL
               </button>
               <button 
+                type="button"
                 onClick={triggerSOS}
                 className="btn btn-danger"
-                style={{ width: 'auto', padding: '0.75rem 2rem', fontWeight: 800, gap: '0.4rem' }}
+                style={{ width: 'auto', padding: '0.85rem 2rem', fontWeight: 900, gap: '0.5rem', boxShadow: '0 4px 20px rgba(239, 68, 68, 0.4)' }}
               >
-                <ShieldAlert size={18} /> Yes, Activate SOS
+                <ShieldAlert size={18} /> ACTIVATE SOS
               </button>
             </div>
           </div>
@@ -559,7 +744,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-          <a href="tel:112" className="card" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '4px solid #ef4444' }}>
+          <a href="tel:112" className="card" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '4px solid #ef4444', textDecoration: 'none' }}>
             <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '0.75rem', borderRadius: '12px', color: '#ef4444' }}>
               <ShieldAlert size={24} />
             </div>
@@ -569,22 +754,22 @@ export const Dashboard: React.FC = () => {
             </div>
           </a>
 
-          <a href="tel:181" className="card" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '4px solid #8b5cf6' }}>
-            <div style={{ background: 'rgba(139, 92, 246, 0.1)', padding: '0.75rem', borderRadius: '12px', color: '#8b5cf6' }}>
-              <ShieldCheck size={24} />
+          <a href="tel:1091" className="card" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '4px solid #ec4899', textDecoration: 'none' }}>
+            <div style={{ background: 'rgba(236, 72, 153, 0.1)', padding: '0.75rem', borderRadius: '12px', color: '#ec4899' }}>
+              <PhoneCall size={24} />
             </div>
             <div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Women Helpline</div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>181</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>1091</div>
             </div>
           </a>
 
-          <a href="tel:108" className="card" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '4px solid #10b981' }}>
+          <a href="tel:108" className="card" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '4px solid #10b981', textDecoration: 'none' }}>
             <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '0.75rem', borderRadius: '12px', color: '#10b981' }}>
               <Activity size={24} />
             </div>
             <div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Medical Response</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Ambulance Response</div>
               <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>108</div>
             </div>
           </a>
@@ -594,11 +779,11 @@ export const Dashboard: React.FC = () => {
       {/* CORE PLATFORM MODULES GRID */}
       <div>
         <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '1.25rem' }}>
-          Personal Safety Suite & Tools
+          Personal Safety Suite &amp; Tools
         </h3>
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
-          
+
           {/* 1. Trusted Contacts */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
@@ -606,144 +791,116 @@ export const Dashboard: React.FC = () => {
                 <div style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', padding: '0.75rem', borderRadius: '14px' }}>
                   <Users size={22} />
                 </div>
-                <span className="badge badge-primary">{activeCount} Active</span>
+                <span className="badge badge-primary">{activeCount} Configured</span>
               </div>
-              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Trusted Contacts</h4>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '0.5rem' }}>
-                Primary: <strong>{primaryContact}</strong>
-              </p>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5 }}>
-                Manage priority responder hierarchy, contact cards, and alert dispatch preferences.
+              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Emergency Contacts</h4>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
+                Primary: <strong>{primaryContact}</strong>. Manage family members and trusted guardians alerted during SOS.
               </p>
             </div>
             <div style={{ marginTop: '1.5rem' }}>
               <Link to="/emergency-contacts" className="btn btn-primary" style={{ fontSize: '0.9rem', gap: '0.4rem' }}>
-                Manage Safety Circle <ArrowRight size={15} />
+                Manage Contacts <ArrowRight size={15} />
               </Link>
             </div>
           </div>
 
-          {/* 2. AI Safety Assistant */}
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <div style={{ background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', padding: '0.75rem', borderRadius: '14px' }}>
-                  <Sparkles size={22} />
-                </div>
-                <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>AI Assistant</span>
-              </div>
-              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>AI Safety Assistant</h4>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
-                24/7 intelligent chat offering situational de-escalation advice, precautions, and travel tips.
-              </p>
-            </div>
-            <div style={{ marginTop: '1.5rem' }}>
-              <Link to="/ai-assistant" className="btn" style={{ background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', border: '1px solid rgba(139, 92, 246, 0.3)', fontSize: '0.9rem', gap: '0.4rem' }}>
-                Chat with Assistant <ArrowRight size={15} />
-              </Link>
-            </div>
-          </div>
-
-          {/* 3. Live Location Sharing */}
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '0.75rem', borderRadius: '14px' }}>
-                  <MapPin size={22} />
-                </div>
-                <span className="badge badge-success">GPS Active</span>
-              </div>
-              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Location Sharing</h4>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
-                Fetch exact device coordinates, generate real-time Google Maps links, and share via Web Share.
-              </p>
-            </div>
-            <div style={{ marginTop: '1.5rem' }}>
-              <Link to="/location-share" className="btn" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.9rem', gap: '0.4rem' }}>
-                Share Live Coordinates <ArrowRight size={15} />
-              </Link>
-            </div>
-          </div>
-
-          {/* 4. Smart Journey Tracker */}
+          {/* 2. Smart Journey */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <div style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', padding: '0.75rem', borderRadius: '14px' }}>
                   <Navigation size={22} />
                 </div>
-                <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
-                  {activeJourney ? 'Active Trip' : 'Trip Guardian'}
-                </span>
+                <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>GPS Guardian</span>
               </div>
               <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Smart Journey</h4>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
-                {activeJourney 
-                  ? `Currently tracking trip to ${activeJourney.destination?.address}. Countdown & alerts enabled.`
-                  : 'Register commute routes with departure, arrival monitoring, and automated safety buffers.'}
+                Real-time route display, arrival countdown timers, and automatic overdue safety alert dispatch.
               </p>
             </div>
             <div style={{ marginTop: '1.5rem' }}>
               <Link to="/journey" className="btn" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', border: '1px solid rgba(59, 130, 246, 0.3)', fontSize: '0.9rem', gap: '0.4rem' }}>
-                {activeJourney ? 'Track Live Journey' : 'View & Plan Journeys'} <ArrowRight size={15} />
+                Smart Journey Center <ArrowRight size={15} />
               </Link>
             </div>
           </div>
 
-          {/* 5. Private Safety Diary */}
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <div style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', padding: '0.75rem', borderRadius: '14px' }}>
-                  <BookOpen size={22} />
-                </div>
-                <span className="badge badge-warning">Private Vault</span>
-              </div>
-              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Safety Diary</h4>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
-                Log situations where you felt unsafe with risk levels, timestamps, and AI pattern recognition.
-              </p>
-            </div>
-            <div style={{ marginTop: '1.5rem' }}>
-              <Link to="/diary" className="btn" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', fontSize: '0.9rem', gap: '0.4rem' }}>
-                Open Private Diary <ArrowRight size={15} />
-              </Link>
-            </div>
-          </div>
-
-          {/* 6. SOS History */}
+          {/* 3. SOS Incident History */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '0.75rem', borderRadius: '14px' }}>
-                  <Clock size={22} />
+                  <Radio size={22} />
                 </div>
-                <span className="badge badge-danger">Audit Logs</span>
+                <span className="badge badge-danger">Audit Log</span>
               </div>
-              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>SOS History</h4>
+              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>SOS History &amp; Alerts</h4>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
-                Review past triggered distress beacons, locations, and resolution timestamps.
+                Review past emergency distress signals, GPS coordinates, timestamps, and notification delivery logs.
               </p>
             </div>
             <div style={{ marginTop: '1.5rem' }}>
               <Link to="/sos-history" className="btn" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', fontSize: '0.9rem', gap: '0.4rem' }}>
-                Review SOS Logs <ArrowRight size={15} />
+                View SOS History <ArrowRight size={15} />
               </Link>
             </div>
           </div>
 
-          {/* 7. Fake Call Simulator */}
+          {/* 4. Safety Diary */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '0.75rem', borderRadius: '14px' }}>
+                  <BookOpen size={22} />
+                </div>
+                <span className="badge badge-success">Encrypted</span>
+              </div>
+              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Safety Diary</h4>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
+                Privately log incidents, suspicious encounters, dates, locations, and personal observations.
+              </p>
+            </div>
+            <div style={{ marginTop: '1.5rem' }}>
+              <Link to="/diary" className="btn" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.3)', fontSize: '0.9rem', gap: '0.4rem' }}>
+                Open Safety Diary <ArrowRight size={15} />
+              </Link>
+            </div>
+          </div>
+
+          {/* 5. AI Safety Assistant */}
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div style={{ background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', padding: '0.75rem', borderRadius: '14px' }}>
+                  <Sparkles size={22} />
+                </div>
+                <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6' }}>Gemini AI</span>
+              </div>
+              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>AI Safety Assistant</h4>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
+                24/7 intelligent companion for real-time safety advice, risk assessment, and legal emergency guidance.
+              </p>
+            </div>
+            <div style={{ marginTop: '1.5rem' }}>
+              <Link to="/ai-assistant" className="btn" style={{ background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6', border: '1px solid rgba(139, 92, 246, 0.3)', fontSize: '0.9rem', gap: '0.4rem' }}>
+                Chat with AI Assistant <ArrowRight size={15} />
+              </Link>
+            </div>
+          </div>
+
+          {/* 6. Fake Call */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <div style={{ background: 'rgba(236, 72, 153, 0.1)', color: '#ec4899', padding: '0.75rem', borderRadius: '14px' }}>
                   <PhoneCall size={22} />
                 </div>
-                <span className="badge" style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#ec4899' }}>Discreet Exit</span>
+                <span className="badge" style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#ec4899' }}>Discreet Escape</span>
               </div>
-              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Fake Call Simulator</h4>
+              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Discreet Fake Call</h4>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
-                Schedule a simulated incoming phone call to gracefully exit uncomfortable interactions.
+                Schedule or immediately trigger an incoming call simulation with realistic voice audio to exit unsafe situations.
               </p>
             </div>
             <div style={{ marginTop: '1.5rem' }}>
@@ -753,7 +910,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* 8. Audio Recording */}
+          {/* 7. Audio Recording */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -762,7 +919,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <span className="badge" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7' }}>Evidence</span>
               </div>
-              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Audio Recording</h4>
+              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Audio Evidence Recorder</h4>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
                 Capture ambient voice evidence using MediaRecorder with live playback and file export.
               </p>
@@ -774,7 +931,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* 9. Incident Reports */}
+          {/* 8. Incident Reports */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -795,7 +952,7 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* 10. Safety Tips */}
+          {/* 9. Safety Tips */}
           <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -804,7 +961,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <span className="badge badge-warning">Guidance</span>
               </div>
-              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Safety Tips & Guides</h4>
+              <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '0.35rem' }}>Safety Tips &amp; Guides</h4>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.5 }}>
                 Expert recommendations for personal safety, digital privacy, transit, and travel.
               </p>

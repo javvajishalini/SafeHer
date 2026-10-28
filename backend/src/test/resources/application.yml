@@ -1,0 +1,55 @@
+# ─── SafeHer Test Configuration ────────────────────────────────────────────────
+# Uses H2 in-memory database for isolated integration tests.
+# Flyway is disabled in tests; Spring/Hibernate creates the schema via ddl-auto=create-drop.
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:safeher_test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;NON_KEYWORDS=VALUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: false
+  flyway:
+    enabled: false
+  mail:
+    host: localhost
+    port: 3025
+    username: test@example.com
+    password: test
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+server:
+  port: 0
+
+jwt:
+  secret: test-secret-key-for-unit-tests-must-be-at-least-32-chars
+  expiration: 3600000
+
+ai:
+  api:
+    key:
+    url: https://generativelanguage.googleapis.com/v1beta
+    model: gemini-2.0-flash
+    enabled: false
+
+safeher:
+  frontend:
+    url: http://localhost:5173
+  sms:
+    enabled: false
+    twilio:
+      account-sid:
+      auth-token:
+      from-number:

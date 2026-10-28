@@ -16,16 +16,26 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Base64;
 import java.util.List;
 import java.util.Set;
 
 /**
- * Central notification service.
- * Supports Email (via Spring Mail / SMTP) and SMS (via Twilio when configured).
- * Every notification attempt is persisted to the notifications table with an accurate status.
+ * Production-style central Notification Service.
+ * Provides concrete implementations for:
+ * - Email Notification (JavaMail / SMTP configuration)
+ * - SMS Notification (Twilio REST API integration without third-party binary dependencies)
+ * - Delivery tracking & audit log persisted in notifications table with real provider responses.
  */
 @Service
 public class NotificationService {
@@ -40,8 +50,9 @@ public class NotificationService {
 
     @Value("${spring.mail.username:}") private String fromEmail;
 
-    // Twilio config — set to empty strings when not configured
+    // Twilio config — configurable via env variables
     @Value("${safeher.sms.enabled:false}") private boolean smsEnabled;
+    @Value("${safeher.sms.provider:twilio}") private String smsProvider;
     @Value("${safeher.sms.twilio.account-sid:}") private String twilioAccountSid;
     @Value("${safeher.sms.twilio.auth-token:}") private String twilioAuthToken;
     @Value("${safeher.sms.twilio.from-number:}") private String twilioFromNumber;
@@ -54,7 +65,7 @@ public class NotificationService {
 
     /**
      * Alert all specified contacts (or all active contacts if list is empty) about an SOS incident.
-     * Optionally enriches message with active journey context.
+     * Enriches message with active journey context if a journey is in progress.
      */
     public void sendSOSNotifications(Long userId, SOSIncident incident,
                                       List<Long> selectedContactIds, Journey activeJourney) {
@@ -70,19 +81,19 @@ public class NotificationService {
         }
 
         String mapsUrl = buildMapsUrl(incident.getLatitude(), incident.getLongitude());
-        String activatedAt = incident.getTimestamp() != null ? TIME_FMT.format(incident.getTimestamp()) : "Unknown";
+        String activatedAt = incident.getTimestamp() != null ? TIME_FMT.format(incident.getTimestamp()) : TIME_FMT.format(Instant.now());
 
         for (EmergencyContact contact : contacts) {
-            String subject = "🚨 SAFEHER EMERGENCY ALERT – " + userName + " needs help!";
+            String subject = "🚨 SAFEHER EMERGENCY ALERT – " + userName + " needs immediate help!";
             String body = buildSOSEmailBody(userName, incident, mapsUrl, activatedAt, activeJourney);
 
             if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
-                sendEmail(userId, contact, subject, body, incident.getId(), null);
+                sendEmail(userId, contact, subject, body, incident.getId(), activeJourney != null ? activeJourney.getId() : null);
             }
 
             if (contact.getPhoneNumber() != null && !contact.getPhoneNumber().isBlank()) {
-                String smsBody = buildSOSSMSBody(userName, mapsUrl, activatedAt);
-                sendSMS(userId, contact, smsBody, incident.getId(), null);
+                String smsBody = buildSOSSMSBody(userName, incident, mapsUrl, activatedAt, activeJourney);
+                sendSMS(userId, contact, smsBody, incident.getId(), activeJourney != null ? activeJourney.getId() : null);
             }
         }
     }
@@ -90,7 +101,7 @@ public class NotificationService {
     // ─── JOURNEY OVERDUE NOTIFICATIONS ───────────────────────────────────────
 
     /**
-     * Called by the overdue scheduler when a journey exceeds its expected arrival time.
+     * Called by the overdue scheduler when a journey exceeds its expected arrival time + safety buffer.
      */
     public void sendJourneyOverdueNotifications(Journey journey) {
         User user = userRepository.findById(journey.getUserId()).orElse(null);
@@ -103,13 +114,13 @@ public class NotificationService {
 
         String mapsUrl = (journey.getLastLatitude() != null && journey.getLastLongitude() != null)
                 ? buildMapsUrl(journey.getLastLatitude(), journey.getLastLongitude())
-                : "Location unavailable";
+                : "Location unavailable (permission pending)";
 
         String expectedArrival = journey.getExpectedArrivalAt() != null
                 ? TIME_FMT.format(journey.getExpectedArrivalAt()) : "Unknown";
 
         for (EmergencyContact contact : contacts) {
-            String subject = "⚠️ SAFEHER JOURNEY ALERT – " + userName + " has not arrived!";
+            String subject = "⚠️ SAFEHER SMART JOURNEY ALERT – " + userName + " has not reached destination!";
             String body = buildOverdueEmailBody(userName, journey, mapsUrl, expectedArrival);
 
             if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
@@ -130,7 +141,9 @@ public class NotificationService {
         String userName = user != null ? user.getFullName() : "A SafeHer user";
 
         Set<EmergencyContact> contacts = journey.getEmergencyContacts();
-        if (contacts == null || contacts.isEmpty()) return;
+        if (contacts == null || contacts.isEmpty()) {
+            contacts = new java.util.HashSet<>(contactRepository.findByUserIdAndIsActiveTrue(journey.getUserId()));
+        }
 
         String arrivedAt = journey.getCompletedAt() != null
                 ? TIME_FMT.format(journey.getCompletedAt()) : TIME_FMT.format(Instant.now());
@@ -141,19 +154,27 @@ public class NotificationService {
                     + userName + " has safely reached their intended destination.\n\n"
                     + "Destination: " + safeAddress(journey.getDestination()) + "\n"
                     + "Arrival Time: " + arrivedAt + "\n\n"
-                    + "No further action is needed. Thank you for being a trusted contact.";
+                    + "No further action is needed. Thank you for being a trusted contact.\n\n"
+                    + "— SafeHer Safety Platform";
 
             if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
                 sendEmail(journey.getUserId(), contact, subject, body, null, journey.getId());
             }
+
+            if (contact.getPhoneNumber() != null && !contact.getPhoneNumber().isBlank()) {
+                String smsBody = "✅ SAFEHER: " + userName + " safely reached " + safeAddress(journey.getDestination()) + " at " + arrivedAt + ".";
+                sendSMS(journey.getUserId(), contact, smsBody, null, journey.getId());
+            }
         }
     }
 
-    // ─── LOW-LEVEL EMAIL ──────────────────────────────────────────────────────
+    // ─── CONCRETE EMAIL NOTIFICATION SERVICE ──────────────────────────────────
 
     public void sendEmail(Long userId, EmergencyContact contact, String subject, String body,
                            Long sosId, Long journeyId) {
         Notification notification = newNotification(userId, "EMAIL", contact.getEmail(), subject, body, sosId, journeyId, contact.getId());
+        notification.setProvider("SMTP / JavaMail");
+
         try {
             if (fromEmail != null && !fromEmail.isBlank()) {
                 SimpleMailMessage message = new SimpleMailMessage();
@@ -162,98 +183,113 @@ public class NotificationService {
                 message.setSubject(subject);
                 message.setText(body);
                 emailSender.send(message);
+
                 notification.setStatus("SENT");
                 notification.setSentAt(Instant.now());
                 notification.setErrorMessage(null);
-                log.info("Email sent to {} for user {}", contact.getEmail(), userId);
+                log.info("Email delivered to {} for user {}", contact.getEmail(), userId);
             } else {
                 notification.setStatus("FAILED");
-                notification.setErrorMessage("Email provider not configured (MAIL_USERNAME is empty).");
-                log.warn("Email not sent – MAIL_USERNAME not configured.");
+                notification.setErrorMessage("Email provider unconfigured: MAIL_USERNAME environment variable is empty.");
+                log.warn("Email alert saved as FAILED: MAIL_USERNAME not set.");
             }
         } catch (Exception e) {
             log.error("Failed to send email to {}: {}", contact.getEmail(), e.getMessage());
             notification.setStatus("FAILED");
-            notification.setErrorMessage(e.getMessage());
+            notification.setErrorMessage("SMTP Error: " + e.getMessage());
         } finally {
             notificationRepository.save(notification);
         }
     }
 
-    // ─── LOW-LEVEL SMS ────────────────────────────────────────────────────────
+    // ─── CONCRETE SMS NOTIFICATION SERVICE ────────────────────────────────────
 
-    /**
-     * Sends SMS via Twilio REST API using only java.net.http (no extra SDK dependency).
-     * If Twilio is not configured, saves a FAILED record with an explanatory message.
-     */
     public void sendSMS(Long userId, EmergencyContact contact, String body,
                          Long sosId, Long journeyId) {
-        Notification notification = newNotification(userId, "SMS", contact.getPhoneNumber(), "SOS/Journey Alert", body, sosId, journeyId, contact.getId());
+        Notification notification = newNotification(userId, "SMS", contact.getPhoneNumber(), "Emergency Alert", body, sosId, journeyId, contact.getId());
+        notification.setProvider("Twilio REST API");
 
         if (!smsEnabled || twilioAccountSid.isBlank() || twilioAuthToken.isBlank() || twilioFromNumber.isBlank()) {
             notification.setStatus("FAILED");
-            notification.setErrorMessage("SMS provider (Twilio) is not configured. Set SMS_ENABLED=true and Twilio credentials.");
+            notification.setErrorMessage("SMS provider (Twilio) is unconfigured. Set SMS_ENABLED=true with TWILIO_ACCOUNT_SID, AUTH_TOKEN & FROM_NUMBER.");
             notificationRepository.save(notification);
-            log.warn("SMS not sent to {} – Twilio not configured.", contact.getPhoneNumber());
+            log.warn("SMS alert to {} recorded as FAILED: Twilio credentials not configured in environment.", contact.getPhoneNumber());
             return;
         }
 
         try {
-            // Build Twilio Messages API request
             String url = "https://api.twilio.com/2010-04-01/Accounts/" + twilioAccountSid + "/Messages.json";
-            String encoded = java.util.Base64.getEncoder().encodeToString((twilioAccountSid + ":" + twilioAuthToken).getBytes());
-            String payload = "From=" + java.net.URLEncoder.encode(twilioFromNumber, "UTF-8")
-                    + "&To=" + java.net.URLEncoder.encode(contact.getPhoneNumber(), "UTF-8")
-                    + "&Body=" + java.net.URLEncoder.encode(body, "UTF-8");
+            String authHeader = "Basic " + Base64.getEncoder().encodeToString((twilioAccountSid + ":" + twilioAuthToken).getBytes(StandardCharsets.UTF_8));
+            String payload = "From=" + URLEncoder.encode(twilioFromNumber, StandardCharsets.UTF_8)
+                    + "&To=" + URLEncoder.encode(contact.getPhoneNumber(), StandardCharsets.UTF_8)
+                    + "&Body=" + URLEncoder.encode(body, StandardCharsets.UTF_8);
 
-            java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
-            java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create(url))
-                    .header("Authorization", "Basic " + encoded)
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(payload))
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(10))
                     .build();
 
-            java.net.http.HttpResponse<String> response = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString());
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Authorization", authHeader)
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(payload))
+                    .timeout(Duration.ofSeconds(15))
+                    .build();
+
+            HttpResponse<String> response = client.send(req, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 201) {
                 notification.setStatus("SENT");
                 notification.setSentAt(Instant.now());
-                log.info("SMS sent to {} via Twilio", contact.getPhoneNumber());
+                notification.setErrorMessage(null);
+                log.info("Twilio SMS successfully dispatched to {}", contact.getPhoneNumber());
             } else {
                 notification.setStatus("FAILED");
-                notification.setErrorMessage("Twilio returned status " + response.statusCode() + ": " + response.body());
-                log.warn("Twilio SMS failed: {} {}", response.statusCode(), response.body());
+                notification.setErrorMessage("Twilio HTTP " + response.statusCode() + ": " + response.body());
+                log.warn("Twilio SMS delivery failed (HTTP {}): {}", response.statusCode(), response.body());
             }
         } catch (Exception e) {
-            log.error("SMS send error to {}: {}", contact.getPhoneNumber(), e.getMessage());
+            log.error("SMS transport error to {}: {}", contact.getPhoneNumber(), e.getMessage());
             notification.setStatus("FAILED");
-            notification.setErrorMessage(e.getMessage());
+            notification.setErrorMessage("SMS Transport Error: " + e.getMessage());
         } finally {
             notificationRepository.save(notification);
         }
     }
 
-    // ─── MESSAGE BUILDERS ─────────────────────────────────────────────────────
+    // ─── MESSAGE TEMPLATE BUILDERS ───────────────────────────────────────────
 
     private String buildSOSEmailBody(String userName, SOSIncident incident, String mapsUrl,
                                       String activatedAt, Journey activeJourney) {
         StringBuilder sb = new StringBuilder();
-        sb.append("🚨 SAFEHER EMERGENCY ALERT\n\n");
-        sb.append(userName).append(" has activated an SOS emergency alert.\n\n");
+        String typeLabel = incident.getSosType() != null ? incident.getSosType().name() : "STANDARD";
+        sb.append("🚨 SAFEHER EMERGENCY ALERT [TYPE: ").append(typeLabel).append("]\n\n");
+        sb.append(userName).append(" has activated a ").append(typeLabel).append(" SOS distress alert!\n\n");
 
-        if (incident.getLatitude() != null) {
-            sb.append("📍 Current Location:\n").append(mapsUrl).append("\n\n");
-        } else {
-            sb.append("📍 Location: Not available (permission denied)\n\n");
+        if (incident.getSosType() == com.safeher.model.SOSType.SILENT) {
+            sb.append("⚠️ NOTE: This alert was triggered in SILENT/STEALTH mode. The user may be in an unsafe situation where loud calls could endanger them. Send discreet messages or contact authorities.\n\n");
         }
 
-        sb.append("🕐 Time: ").append(activatedAt).append("\n\n");
+        if (incident.getMessage() != null && !incident.getMessage().isBlank()) {
+            sb.append("💬 Alert Message: ").append(incident.getMessage()).append("\n\n");
+        }
+
+        if (incident.getLatitude() != null && incident.getLongitude() != null) {
+            sb.append("📍 Current Location:\n").append(mapsUrl).append("\n");
+            if (incident.getAccuracy() != null) {
+                sb.append("   Accuracy: ±").append(Math.round(incident.getAccuracy())).append(" meters\n");
+            }
+            sb.append("\n");
+        } else {
+            sb.append("📍 Current Location: GPS location unavailable (permission denied or device timeout)\n\n");
+        }
+
+        sb.append("🕐 Activated At: ").append(activatedAt).append("\n\n");
 
         if (activeJourney != null) {
-            sb.append("ℹ️ She has an active Smart Journey:\n");
-            sb.append("   From: ").append(safeAddress(activeJourney.getStartLocation())).append("\n");
-            sb.append("   To: ").append(safeAddress(activeJourney.getDestination())).append("\n");
+            sb.append("ℹ️ She has an active Smart Journey in progress:\n");
+            sb.append("   Starting Location: ").append(safeAddress(activeJourney.getStartLocation())).append("\n");
+            sb.append("   Intended Destination: ").append(safeAddress(activeJourney.getDestination())).append("\n");
             if (activeJourney.getExpectedArrivalAt() != null) {
                 sb.append("   Expected Arrival: ").append(TIME_FMT.format(activeJourney.getExpectedArrivalAt())).append("\n");
             }
@@ -261,18 +297,26 @@ public class NotificationService {
         }
 
         sb.append("⚠️ The user may need immediate assistance.\n");
-        sb.append("Please contact them immediately or call emergency services (112).\n\n");
-        sb.append("— SafeHer Safety Platform");
+        sb.append("Please contact them immediately or dial emergency helpline (112).\n\n");
+        sb.append("— SafeHer Real-Time Safety Platform");
         return sb.toString();
     }
 
-    private String buildSOSSMSBody(String userName, String mapsUrl, String activatedAt) {
-        return "🚨 SAFEHER SOS ALERT\n" + userName + " needs help!\n📍 " + mapsUrl + "\n🕐 " + activatedAt + "\nCall 112 immediately.";
+    private String buildSOSSMSBody(String userName, SOSIncident incident, String mapsUrl, String activatedAt, Journey activeJourney) {
+        String typeTag = incident.getSosType() != null ? "[" + incident.getSosType().name() + "]" : "[SOS]";
+        if (activeJourney != null) {
+            return "🚨 SAFEHER " + typeTag + ": " + userName + " triggered SOS during journey to "
+                    + safeAddress(activeJourney.getDestination()) + "!\nLoc: " + mapsUrl + "\nTime: " + activatedAt + "\nCall or dial 112.";
+        }
+        if (incident.getSosType() == com.safeher.model.SOSType.SILENT) {
+            return "🚨 SAFEHER [SILENT SOS]: " + userName + " triggered stealth distress beacon!\nLoc: " + mapsUrl + "\nDiscreet check recommended or dial 112.";
+        }
+        return "🚨 SAFEHER " + typeTag + ": " + userName + " activated emergency beacon!\nLoc: " + mapsUrl + "\nTime: " + activatedAt + "\nCall immediately or dial 112.";
     }
 
     private String buildOverdueEmailBody(String userName, Journey journey, String mapsUrl, String expectedArrival) {
         return "⚠️ SAFEHER SMART JOURNEY ALERT\n\n"
-                + userName + " started a Smart Journey but has NOT reached the destination within the expected time.\n\n"
+                + userName + " started a Smart Journey but has NOT reached the destination within the expected time!\n\n"
                 + "📍 Starting Location: " + safeAddress(journey.getStartLocation()) + "\n"
                 + "🏁 Intended Destination: " + safeAddress(journey.getDestination()) + "\n"
                 + "⏰ Expected Arrival: " + expectedArrival + "\n"
@@ -284,9 +328,8 @@ public class NotificationService {
     }
 
     private String buildOverdueSMSBody(String userName, Journey journey, String mapsUrl, String expectedArrival) {
-        return "⚠️ SAFEHER ALERT\n" + userName + " hasn't arrived by " + expectedArrival
-                + "\nDest: " + safeAddress(journey.getDestination())
-                + "\nLast loc: " + mapsUrl;
+        return "⚠️ SAFEHER ALERT: " + userName + " hasn't arrived at " + safeAddress(journey.getDestination())
+                + " by expected time " + expectedArrival + ".\nLast loc: " + mapsUrl;
     }
 
     // ─── HELPERS ─────────────────────────────────────────────────────────────
@@ -297,11 +340,11 @@ public class NotificationService {
     }
 
     private String safeAddress(com.safeher.model.Location loc) {
-        if (loc == null) return "Unknown";
+        if (loc == null) return "Designated Destination";
         if (loc.getAddress() != null && !loc.getAddress().isBlank()) return loc.getAddress();
         if (loc.getLatitude() != null && loc.getLongitude() != null)
             return loc.getLatitude() + ", " + loc.getLongitude();
-        return "Unknown";
+        return "Designated Destination";
     }
 
     private Notification newNotification(Long userId, String type, String recipient, String title,
@@ -313,6 +356,8 @@ public class NotificationService {
         n.setTitle(title);
         n.setMessage(message);
         n.setRelatedSosId(sosId);
+        n.setRelatedJourneyId(journeyId);
+        n.setRelatedContactId(contactId);
         n.setStatus("PENDING");
         return n;
     }

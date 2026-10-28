@@ -15,24 +15,23 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 public class AIChatService {
-    
+
     private final AIConversationRepository conversationRepository;
     private final AIMessageRepository messageRepository;
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${ai.api.key}")
+    @Value("${ai.api.key:}")
     private String apiKey;
 
-    @Value("${ai.api.url}")
+    @Value("${ai.api.url:https://generativelanguage.googleapis.com/v1beta}")
     private String apiUrl;
-    
+
     @Value("${ai.api.model:gemini-2.0-flash}")
     private String aiModel;
 
@@ -45,6 +44,7 @@ public class AIChatService {
     }
 
     public AIAssistantResponse sendMessage(Long userId, AIAssistantRequest request) {
+        // 1. Resolve or create conversation
         AIConversation conversation;
         if (request.getConversationId() != null) {
             conversation = conversationRepository.findByIdAndUserId(request.getConversationId(), userId)
@@ -52,84 +52,96 @@ public class AIChatService {
         } else {
             conversation = new AIConversation();
             conversation.setUserId(userId);
-            String title = request.getMessage().length() > 30 
-                ? request.getMessage().substring(0, 30) + "..." 
-                : request.getMessage();
+            String title = request.getMessage().length() > 40
+                    ? request.getMessage().substring(0, 40) + "..."
+                    : request.getMessage();
             conversation.setTitle(title);
             conversation = conversationRepository.save(conversation);
         }
 
-        // Save user message
+        // 2. Load existing message history BEFORE saving the new user message
+        //    This prevents the double-append bug (history was loaded after save in old version).
+        List<AIMessage> history = messageRepository.findByConversationOrderByCreatedAtAsc(conversation);
+
+        // 3. Save user message
         AIMessage userMessage = new AIMessage();
         userMessage.setConversation(conversation);
         userMessage.setRole("user");
         userMessage.setContent(request.getMessage());
         messageRepository.save(userMessage);
 
-        String aiResponseText = "AI is currently disabled or unavailable.";
-        
+        // 4. Call AI with history + current message
+        String aiResponseText = "AI Safety Assistant is currently unavailable. Please check back when the AI provider is configured.";
+
         if (aiEnabled && apiKey != null && !apiKey.isBlank()) {
             try {
-                // Build history for Gemini
-                List<AIMessage> history = conversation.getMessages();
-                
-                StringBuilder contentBuilder = new StringBuilder();
-                contentBuilder.append("{\"contents\":[");
-                
+                StringBuilder requestBody = new StringBuilder("{\"contents\":[");
+
+                // Add prior history messages
                 for (int i = 0; i < history.size(); i++) {
                     AIMessage msg = history.get(i);
-                    String role = msg.getRole().equals("user") ? "user" : "model";
-                    contentBuilder.append(String.format("{\"role\":\"%s\",\"parts\":[{\"text\":\"%s\"}]}", 
-                        role, msg.getContent().replace("\"", "\\\"").replace("\n", "\\n")));
-                    
-                    if (i < history.size() - 1) {
-                        contentBuilder.append(",");
-                    }
+                    String role = "user".equals(msg.getRole()) ? "user" : "model";
+                    appendGeminiMessage(requestBody, role, msg.getContent());
+                    requestBody.append(",");
                 }
-                
-                // Add the current message if history didn't include the unsaved one
-                if (!history.isEmpty()) contentBuilder.append(",");
-                contentBuilder.append(String.format("{\"role\":\"user\",\"parts\":[{\"text\":\"%s\"}]}", 
-                    request.getMessage().replace("\"", "\\\"").replace("\n", "\\n")));
-                
-                contentBuilder.append("],\"systemInstruction\":{\"parts\":[{\"text\":\"You are SafeHer AI, an empathetic, professional, and knowledgeable women's safety assistant. Provide helpful, trauma-informed advice regarding safety, situational awareness, and emergency preparedness. Do not give medical or legal advice.\"}]}}");
-                
+
+                // Add the current user message
+                appendGeminiMessage(requestBody, "user", request.getMessage());
+
+                requestBody.append("],\"systemInstruction\":{\"parts\":[{\"text\":\"You are SafeHer AI — an empathetic, professional, and trauma-informed women's safety assistant. Provide accurate, compassionate safety guidance and situational awareness tips. Do not provide medical or legal advice. Encourage users to contact emergency services (112) in life-threatening situations.\"}]}}");
+
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
-                HttpEntity<String> entity = new HttpEntity<>(contentBuilder.toString(), headers);
-                
+                HttpEntity<String> entity = new HttpEntity<>(requestBody.toString(), headers);
+
                 String url = apiUrl + "/models/" + aiModel + ":generateContent?key=" + apiKey;
                 String responseStr = restTemplate.postForObject(url, entity, String.class);
-                
+
                 JsonNode rootNode = objectMapper.readTree(responseStr);
-                aiResponseText = rootNode.path("candidates").get(0).path("content").path("parts").get(0).path("text").asText();
+                JsonNode candidateText = rootNode.path("candidates").get(0)
+                        .path("content").path("parts").get(0).path("text");
+                if (!candidateText.isMissingNode()) {
+                    aiResponseText = candidateText.asText();
+                }
             } catch (Exception e) {
-                aiResponseText = "I'm having trouble connecting to my service right now. Please try again later.";
+                aiResponseText = "I'm having trouble connecting to my AI service right now. Please try again in a moment, or contact emergency services (112) if you are in immediate danger.";
             }
         }
 
-        // Save AI message
+        // 5. Save AI response
         AIMessage aiMessage = new AIMessage();
         aiMessage.setConversation(conversation);
         aiMessage.setRole("assistant");
         aiMessage.setContent(aiResponseText);
         messageRepository.save(aiMessage);
 
+        // 6. Build response with full message history (reload fresh from DB)
+        List<AIMessage> allMessages = messageRepository.findByConversationOrderByCreatedAtAsc(conversation);
+
         AIAssistantResponse response = new AIAssistantResponse();
         response.setConversationId(conversation.getId());
         response.setReply(aiResponseText);
-        
-        // Reload messages to return full history
-        List<AIAssistantResponse.MessageDTO> messageDTOs = conversationRepository.findById(conversation.getId())
-            .get().getMessages().stream()
-            .map(m -> new AIAssistantResponse.MessageDTO(m.getId(), m.getRole(), m.getContent(), m.getCreatedAt()))
-            .collect(Collectors.toList());
-        response.setMessages(messageDTOs);
-        
+        response.setMessages(allMessages.stream()
+                .map(m -> new AIAssistantResponse.MessageDTO(m.getId(), m.getRole(), m.getContent(), m.getCreatedAt()))
+                .collect(Collectors.toList()));
+
         return response;
     }
-    
+
     public List<AIConversation> getConversations(Long userId) {
         return conversationRepository.findByUserIdOrderByUpdatedAtDesc(userId);
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    /** Appends a Gemini-format message object to the JSON builder. */
+    private void appendGeminiMessage(StringBuilder sb, String role, String content) {
+        String escapedContent = content
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+        sb.append(String.format("{\"role\":\"%s\",\"parts\":[{\"text\":\"%s\"}]}", role, escapedContent));
     }
 }

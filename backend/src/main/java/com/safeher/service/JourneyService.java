@@ -32,6 +32,7 @@ public class JourneyService {
     @Autowired private JourneyRepository journeyRepository;
     @Autowired private EmergencyContactRepository contactRepository;
     @Autowired private NotificationService notificationService;
+    @Autowired private com.safeher.repository.SOSIncidentRepository sosRepository;
 
     // ─── CREATE JOURNEY ────────────────────────────────────────────────────────
 
@@ -213,6 +214,26 @@ public class JourneyService {
             journey.setStatus(JourneyStatus.OVERDUE);
             journey.setOverdueAlertSent(true);
             journeyRepository.save(journey);
+
+            // Persist OVERDUE SOS incident for auditing and active alert tracking
+            try {
+                com.safeher.model.SOSIncident overdueSos = new com.safeher.model.SOSIncident();
+                overdueSos.setUserId(journey.getUserId());
+                overdueSos.setSosType(com.safeher.model.SOSType.OVERDUE);
+                overdueSos.setJourneyId(journey.getId());
+                overdueSos.setLatitude(journey.getLastLatitude() != null ? journey.getLastLatitude() : (journey.getDestination() != null ? journey.getDestination().getLatitude() : null));
+                overdueSos.setLongitude(journey.getLastLongitude() != null ? journey.getLastLongitude() : (journey.getDestination() != null ? journey.getDestination().getLongitude() : null));
+                overdueSos.setMessage("AUTOMATIC OVERDUE ALERT: Smart Journey '" + journey.getTitle() + "' has exceeded its arrival deadline. Destination: " + (journey.getDestination() != null ? journey.getDestination().getAddress() : "Unknown"));
+                overdueSos.setStatus(com.safeher.model.SOSStatus.ACTIVE);
+                overdueSos.setTimestamp(now);
+                overdueSos.setCreatedAt(now);
+                if (journey.getEmergencyContacts() != null && !journey.getEmergencyContacts().isEmpty()) {
+                    overdueSos.setEmergencyContacts(new HashSet<>(journey.getEmergencyContacts()));
+                }
+                sosRepository.save(overdueSos);
+            } catch (Exception e) {
+                log.error("Failed to persist overdue SOS incident for journey {}: {}", journey.getId(), e.getMessage());
+            }
 
             try {
                 notificationService.sendJourneyOverdueNotifications(journey);

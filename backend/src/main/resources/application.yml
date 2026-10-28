@@ -2,27 +2,26 @@ spring:
   application:
     name: SafeHer
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://127.0.0.1:5432/safeher}
-    username: ${DATABASE_USERNAME:postgres}
-    password: ${DATABASE_PASSWORD:shalini@2005}
-    driver-class-name: org.postgresql.Driver
+    url: ${DATABASE_URL:${DB_URL:jdbc:h2:mem:safeher;DB_CLOSE_DELAY=-1;MODE=PostgreSQL}}
+    username: ${DATABASE_USERNAME:${DB_USERNAME:sa}}
+    password: ${DATABASE_PASSWORD:${DB_PASSWORD:}}
+    driver-class-name: org.h2.Driver
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: false
   flyway:
-    enabled: true
+    enabled: ${FLYWAY_ENABLED:false}
     baseline-on-migrate: true
     locations: classpath:db/migration
   mail:
-    host: ${MAIL_HOST:smtp.gmail.com}
-    port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    host: ${MAIL_HOST:${EMAIL_HOST:smtp.gmail.com}}
+    port: ${MAIL_PORT:${EMAIL_PORT:587}}
+    username: ${MAIL_USERNAME:${EMAIL_USERNAME:}}
+    password: ${MAIL_PASSWORD:${EMAIL_PASSWORD:}}
     properties:
       mail:
         smtp:
@@ -35,12 +34,12 @@ server:
 
 jwt:
   secret: ${JWT_SECRET:825c866d9294ff1929bd7d8df981df1b306fc6e2320b9dfbe5412dc08ebc4349}
-  expiration: 86400000
+  expiration: ${JWT_EXPIRATION:86400000}
 
 ai:
   api:
     key: ${AI_API_KEY:}
-    url: ${AI_API_URL:https://generativelanguage.googleapis.com/v1beta}
+    url: ${AI_API_URL:${AI_BASE_URL:https://generativelanguage.googleapis.com/v1beta}}
     model: ${AI_MODEL:gemini-2.0-flash}
     enabled: ${AI_ENABLED:false}
 
@@ -49,10 +48,14 @@ springdoc:
     path: /swagger-ui.html
 
 safeher:
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:5173}
+  maps:
+    api-key: ${MAP_API_KEY:}
   sms:
     enabled: ${SMS_ENABLED:false}
     provider: ${SMS_PROVIDER:twilio}
     twilio:
-      account-sid: ${TWILIO_ACCOUNT_SID:}
-      auth-token: ${TWILIO_AUTH_TOKEN:}
-      from-number: ${TWILIO_FROM_NUMBER:}
+      account-sid: ${TWILIO_ACCOUNT_SID:${SMS_ACCOUNT_SID:}}
+      auth-token: ${TWILIO_AUTH_TOKEN:${SMS_AUTH_TOKEN:}}
+      from-number: ${TWILIO_FROM_NUMBER:${SMS_FROM_NUMBER:}}
